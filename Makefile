@@ -5,15 +5,17 @@ CFLAGS = -Wall -Werror -Wextra -pedantic -Wno-missing-braces -Wshadow -Wpointer-
 
 all: txer rxer
 
-txer: client.o
+txer: client.o datalist.o
 	$(CC) $^ -o $@
 
-rxer: server.o
+rxer: server.o datalist.o
 	$(CC) $^ -o $@
 
 server.o: server.c
 
 client.o: client.c
+
+datalist.o: datalist.c
 
 clean:
 	$(RM) txer rxer *.o
