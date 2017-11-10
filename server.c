@@ -157,9 +157,9 @@ int main(int argc, char *argv[])
 	if (NULL == port)
 		port = strdup(DEFAULT_SERVER_PORT);
 
-    int socket = open_socket(port);
-    accept_connection(socket);
+	int socket = open_socket(port);
+	accept_connection(socket);
 
-    free(port);
+	free(port);
 	return EXIT_SUCCESS;
 }
