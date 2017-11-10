@@ -10,17 +10,19 @@ CFLAGS = -Wall -Werror -Wextra -pedantic -Wno-missing-braces -Wshadow -Wpointer-
 
 all: txer rxer
 
-txer: client.o datalist.o
+txer: client.o datalist.o common.o
 	$(CC) $^ -o $@
 
-rxer: server.o datalist.o
+rxer: server.o datalist.o common.o
 	$(CC) $^ -o $@
 
 server.o: server.c common.h
 
 client.o: client.c common.h
 
-datalist.o: datalist.c
+datalist.o: datalist.c common.h
+
+common.o: common.h
 
 clean:
 	$(RM) txer rxer *.o
