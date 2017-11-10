@@ -11,4 +11,6 @@
 
 #define DEFAULT_SERVER_PORT "6060"
 
+void mem_error(void);
+
 #endif

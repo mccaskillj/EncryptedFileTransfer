@@ -1,17 +1,27 @@
+/*
+ *  Group 3
+ *  Assignment #3 - Secure File Transfer
+ *  CMPT361 F17
+ *
+ *  Purpose: Linked list which has nodes that contain file
+ *  transfer specific fields
+ */
+
 #include <stdlib.h>
 #include <string.h>
 
+#include "common.h"
 #include "datalist.h"
 
 dataHead *datalistInit()
 {
 	dataHead *list = malloc(sizeof(dataNode));
 	if (list == NULL)
-		exit(EXIT_FAILURE);
+		mem_error();
 
 	list->vector = malloc(sizeof(char) * VECTOR_SIZE);
 	if (list->vector == NULL)
-		exit(EXIT_FAILURE);
+		mem_error();
 
 	list->first = NULL;
 	list->last = NULL;
@@ -25,16 +35,16 @@ static dataNode *datalistCreateNode(char *name, int size, char *hash)
 {
 	dataNode *node = malloc(sizeof(dataNode));
 	if (node == NULL)
-		exit(EXIT_FAILURE);
+		mem_error();
 
 	node->name = malloc(sizeof(char) * NAME_SIZE);
 	if (node->name == NULL)
-		exit(EXIT_FAILURE);
+		mem_error();
 	strncpy(node->name, name, NAME_SIZE - 1);
 
 	node->hash = malloc(sizeof(char) * HASH_SIZE);
 	if (node->hash == NULL)
-		exit(EXIT_FAILURE);
+		mem_error();
 	strncpy(node->hash, hash, HASH_SIZE - 1);
 
 	node->next = NULL;
@@ -104,7 +114,8 @@ dataNode *datalistGetIndex(dataHead *list, int index)
 		return NULL;
 
 	dataNode *node = list->first;
-	for (int i = 0; i < index; i++, node = node->next);
+	for (int i = 0; i < index; i++, node = node->next)
+		;
 
 	return node;
 }
