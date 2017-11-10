@@ -17,7 +17,7 @@
 
 #include "common.h"
 
-void usage(char *bin_path, int exit_status)
+static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
 

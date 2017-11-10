@@ -98,13 +98,6 @@ void datalistDestroy(dataHead *list)
 	list = NULL;
 }
 
-/*char *datalistToString(dataNode *node)
-{
-	//placeholder for a later implementation
-
-	return "";
-}*/
-
 dataNode *datalistGetIndex(dataHead *list, int index)
 {
 	if (index >= list->size)
