@@ -36,4 +36,6 @@ void datalistDestroy(dataHead *list);
 
 dataNode *datalistGetIndex(dataHead *list, int index);
 
+char *datalistGeneratePayload(dataHead *list);
+
 #endif /*DATALIST_H*/

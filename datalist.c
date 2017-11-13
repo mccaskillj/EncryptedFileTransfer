@@ -9,6 +9,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <arpa/inet.h>
 
 #include "common.h"
 #include "datalist.h"
@@ -97,6 +99,54 @@ void datalistRemove(dataHead *list, dataNode *node)
 	node->hash = NULL;
 	free(node);
 	node = NULL;
+}
+
+static char *datalistCopyItem(dataNode *node, char *cpyLocation)
+{
+	strncpy(cpyLocation, node->name, NAME_BYTES);
+	cpyLocation += NAME_BYTES;
+	*((uint32_t *)(cpyLocation)) = (uint32_t)htons(node->size);
+	cpyLocation += SIZE_BYTES;
+	strncpy(cpyLocation, node->hash, HASH_BYTES);
+	cpyLocation += HASH_BYTES;
+	strncpy(cpyLocation, "\n", 1);
+	cpyLocation += 1;
+
+	return cpyLocation;
+}
+
+char *datalistGeneratePayload(dataHead *list)
+{
+	char *payload;
+	char *cpyLocation;
+	dataNode *pos;
+
+	//size of the line plus a newline character
+	int lineSize = NAME_BYTES + SIZE_BYTES + HASH_BYTES + 1;
+
+	//size of header portion including 2 newlines
+	int payloadSize = FILES_BYTES + INIT_VEC_BYTES + 2;
+	payloadSize += list->size * lineSize;
+
+	payload = calloc(payloadSize + 1, sizeof(char));
+	if (payload == NULL)
+		mem_error();
+
+	cpyLocation = payload;
+
+	*((uint16_t *)(cpyLocation)) = (uint16_t)htons(list->numFiles);
+	cpyLocation += FILES_BYTES;
+	strncpy(cpyLocation, "\n", 1);
+	cpyLocation += 1;
+	strncpy(cpyLocation, list->vector, INIT_VEC_BYTES);
+	cpyLocation += INIT_VEC_BYTES;
+	strncpy(cpyLocation, "\n", 1);
+
+	for (pos = list->first; pos != NULL; pos = pos->next) {
+		cpyLocation = datalistCopyItem(pos, cpyLocation);
+	}
+
+	return payload;
 }
 
 void datalistDestroy(dataHead *list)
