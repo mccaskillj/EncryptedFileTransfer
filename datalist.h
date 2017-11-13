@@ -7,9 +7,8 @@
  *  file transfer specific fields
  */
 
-#define VECTOR_SIZE 128
-#define NAME_SIZE 10
-#define HASH_SIZE 128
+#ifndef DATALIST_H
+#define DATALIST_H
 
 typedef struct dataNode {
 	struct dataNode *prev;
@@ -27,7 +26,7 @@ typedef struct dataHead {
 	int numFiles;
 } dataHead;
 
-dataHead *datalistInit();
+dataHead *datalistInit(char *vector, int numFiles);
 
 void datalistAppend(dataHead *list, char *name, int size, char *hash);
 
@@ -36,3 +35,5 @@ void datalistRemove(dataHead *list, dataNode *node);
 void datalistDestroy(dataHead *list);
 
 dataNode *datalistGetIndex(dataHead *list, int index);
+
+#endif /*DATALIST_H*/

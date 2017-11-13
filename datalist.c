@@ -13,16 +13,18 @@
 #include "common.h"
 #include "datalist.h"
 
-dataHead *datalistInit()
+dataHead *datalistInit(char *vector, int numFiles)
 {
 	dataHead *list = malloc(sizeof(dataNode));
 	if (list == NULL)
 		mem_error();
 
-	list->vector = malloc(sizeof(char) * VECTOR_SIZE);
+	list->vector = calloc(INIT_VEC_BYTES + 1, sizeof(char));
 	if (list->vector == NULL)
 		mem_error();
 
+	strncpy(list->vector, vector, INIT_VEC_BYTES);
+	list->numFiles = numFiles;
 	list->first = NULL;
 	list->last = NULL;
 	list->size = 0;
@@ -37,15 +39,15 @@ static dataNode *datalistCreateNode(char *name, int size, char *hash)
 	if (node == NULL)
 		mem_error();
 
-	node->name = malloc(sizeof(char) * NAME_SIZE);
+	node->name = malloc(sizeof(char) * NAME_BYTES + 1);
 	if (node->name == NULL)
 		mem_error();
-	strncpy(node->name, name, NAME_SIZE - 1);
+	strncpy(node->name, name, NAME_BYTES);
 
-	node->hash = malloc(sizeof(char) * HASH_SIZE);
+	node->hash = malloc(sizeof(char) * HASH_BYTES + 1);
 	if (node->hash == NULL)
 		mem_error();
-	strncpy(node->hash, hash, HASH_SIZE - 1);
+	strncpy(node->hash, hash, HASH_BYTES);
 
 	node->next = NULL;
 	node->prev = NULL;
