@@ -9,6 +9,7 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <netdb.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,17 +17,22 @@
 #include <unistd.h>
 
 #include "common.h"
+#include "datalist.h"
+#include "filesys.h"
 
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
 
 	fprintf(stderr,
-		"Usage: %s [-p port][-h]\n\n"
+		"Usage: %s [-k key][-f files][-p port][-h]\n\n"
 		"Options:\n"
+		"-k Path to 256 bit AES encryption key (default %s)\n"
+		"-f Comma separated path(s) to file(s) to transfer (eg: "
+		"file1,file2)\n"
 		"-p Port to connect to server (default %s)\n"
 		"-h Help\n\n",
-		bin, DEFAULT_SERVER_PORT);
+		bin, DEFAULT_KEY_PATH, DEFAULT_SERVER_PORT);
 	exit(exit_status);
 }
 
@@ -81,15 +87,33 @@ static int open_socket(char *port)
 	return socketfd;
 }
 
+// Transfer files to the server at the specified address with the
+// given AES key. Returns true on successful transfer of all non-duplicate
+// files, false otherwise.
+static bool transfer(dataHead *files, char *port, char *key)
+{
+	(void)files;
+	(void)port;
+	(void)key;
+	open_socket(port);
+	return false;
+}
+
 int main(int argc, char *argv[])
 {
 	int opt = 0;
-	char *port = NULL;
+	char *port = NULL, *key_path = NULL, *file_paths = NULL;
 
-	while ((opt = getopt(argc, argv, "p:h")) != -1) {
+	while ((opt = getopt(argc, argv, "p:k:f:h")) != -1) {
 		switch (opt) {
 		case 'p':
 			port = strdup(optarg);
+			break;
+		case 'k':
+			key_path = strdup(optarg);
+			break;
+		case 'f':
+			file_paths = strdup(optarg);
 			break;
 		case 'h':
 			usage(argv[0], EXIT_SUCCESS);
@@ -102,12 +126,36 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (NULL == file_paths)
+		usage(argv[0], EXIT_FAILURE); // Files required for transfer
+
+	if (NULL == key_path)
+		key_path = strdup(DEFAULT_KEY_PATH);
+
 	if (NULL == port)
 		port = strdup(DEFAULT_SERVER_PORT);
 
-	int socket = open_socket(port);
-	close(socket);
+	char *key = read_key(key_path);
+	if (NULL == key) {
+		fprintf(stderr, "reading key %s failed\n", key_path);
+		free(port);
+		free(key_path);
+		exit(EXIT_FAILURE);
+	}
+
+	dataHead *files = datalistInit("fakevector", 1);
+	int status = EXIT_SUCCESS;
+
+	// TODO: Initialize the list nodes for each file to be transferred
+
+	bool ok = transfer(files, port, key);
+	if (!ok) {
+		status = EXIT_FAILURE;
+		fprintf(stderr, "transferring files failed\n");
+	}
 
 	free(port);
-	return EXIT_SUCCESS;
+	free(key_path);
+	free(key);
+	return status;
 }
