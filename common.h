@@ -12,7 +12,7 @@
 #define DEFAULT_SERVER_PORT "6060"
 
 #define FILES_BYTES 2
-#define INIT_VEC_BYTES 32
+#define INIT_VEC_BYTES 16
 #define NAME_BYTES 255
 #define SIZE_BYTES 4
 #define HASH_BYTES 64
