@@ -91,6 +91,7 @@ char *read_key(char *key_path)
 		return NULL;
 	}
 
+	fclose(fp);
 	return key;
 }
 
@@ -111,4 +112,15 @@ bool ensure_dir(char *path)
 		return false;
 
 	return true;
+}
+
+uint32_t filesize(char *path)
+{
+	struct stat st;
+
+	int err = stat(path, &st);
+	if (err == -1)
+		return 0;
+
+	return st.st_size;
 }

@@ -31,4 +31,10 @@ void ensure_dir(char *path);
  */
 char *addr_dirname(struct sockaddr_storage s);
 
+/*
+ * Return the size of a file in bytes at the given path. Will return
+ * 0 if the path isn't a valid file
+ */
+uint32_t filesize(char *path);
+
 #endif

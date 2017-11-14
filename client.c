@@ -6,6 +6,7 @@
  *  Purpose: Client (txer) entry point.
  */
 
+#include <gcrypt.h>
 #include <getopt.h>
 #include <libgen.h>
 #include <netdb.h>
@@ -14,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -79,6 +81,8 @@ static int open_socket(char *port)
 		exit(EXIT_FAILURE);
 	}
 
+	freeaddrinfo(results);
+
 	// This can go, it's for checking if the data can be received.
 	char buf[size];
 	recv(socketfd, buf, size, 0);
@@ -97,6 +101,137 @@ static bool transfer(dataHead *files, char *port, char *key)
 	(void)key;
 	open_socket(port);
 	return false;
+}
+
+/*
+ * Generate the initialization vector for a file transfer
+ */
+static char *generate_vector()
+{
+	srand(time(NULL));
+
+	char *vector = malloc(INIT_VEC_BYTES);
+	if (NULL == vector)
+		mem_error();
+
+	for (int i = 0; i < INIT_VEC_BYTES; i++) {
+		vector[i] = rand() % 255;
+	}
+
+	return vector;
+}
+
+/*
+ * Parse comma separated file paths into an array of strings.
+ */
+static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
+{
+	char **paths = malloc(file_cnt * sizeof(char *));
+
+	// Single - no need to parse
+	if (file_cnt == 1) {
+		paths[0] = strdup(file_paths);
+		return paths;
+	}
+
+	// We have multiple - parse them out
+	int n = 0;
+
+	char *path = strtok(file_paths, ",");
+	while (path != NULL) {
+		paths[n] = strdup(path);
+		n++;
+		path = strtok(NULL, ",");
+	}
+
+	return paths;
+}
+
+/*
+ * Generate SHA-512 hashes for each file are transferring. Returns
+ * an array of pointers to hashes in the same order as the argument.
+ * Will return NULL if one of the file paths is invalid.
+ */
+static char **generate_hashes(char **to_transfer, uint16_t num_files)
+{
+	char **hashes = malloc(num_files * sizeof(char *));
+	if (NULL == hashes)
+		mem_error();
+
+	gcry_md_hd_t hd;
+	gcry_error_t err;
+	char tmpbuf[HASH_CHUNK_SIZE];
+
+	err = gcry_md_open(&hd, GCRY_MD_SHA512, 0);
+	if (err) {
+		gcry_strerror(err);
+		exit(EXIT_FAILURE);
+	}
+
+	// Hash each file and store it. We will re-use the cipher handle
+	for (int i = 0; i < num_files; i++) {
+		hashes[i] = malloc(HASH_BYTES);
+		if (NULL == hashes[i])
+			mem_error();
+
+		FILE *f = fopen(to_transfer[i], "r");
+		if (NULL == f) {
+			fprintf(stderr, "open %s failed: digest\n",
+				to_transfer[i]);
+			return NULL;
+		}
+
+		while (1) {
+			int len = fread(tmpbuf, 1, HASH_CHUNK_SIZE, f);
+
+			gcry_md_write(hd, tmpbuf, len);
+			if (len < HASH_CHUNK_SIZE)
+				break;
+		}
+
+		unsigned char *digest = gcry_md_read(hd, GCRY_MD_SHA512);
+		memcpy(hashes[i], digest, HASH_BYTES);
+		gcry_md_reset(hd);
+		fclose(f);
+	}
+
+	gcry_md_close(hd);
+	return hashes;
+}
+
+/*
+ * Determine the size of each file to be transferred with AES-256
+ * encryption. Returns an array of sizes
+ */
+static uint32_t *parse_sizes(char **to_transfer, uint16_t num_files)
+{
+	uint32_t *sizes = malloc(num_files * sizeof(uint32_t));
+	if (NULL == sizes)
+		mem_error();
+
+	for (int i = 0; i < num_files; i++) {
+		uint32_t size = filesize(to_transfer[i]);
+		sizes[i] = size + padding_aes(size);
+	}
+
+	return sizes;
+}
+
+/*
+ * Parse the number of files that are comma separated in the command
+ * line argument for files that should be transferred
+ */
+static uint16_t parse_file_cnt(char *files_arg)
+{
+	int paths_len = strlen(files_arg);
+	uint16_t file_cnt = 1;
+
+	for (int i = 0; i < paths_len; i++) {
+		if (files_arg[i] == ',')
+			file_cnt++;
+	}
+
+	return file_cnt;
 }
 
 int main(int argc, char *argv[])
@@ -138,24 +273,55 @@ int main(int argc, char *argv[])
 	char *key = read_key(key_path);
 	if (NULL == key) {
 		fprintf(stderr, "reading key %s failed\n", key_path);
-		free(port);
-		free(key_path);
 		exit(EXIT_FAILURE);
 	}
 
-	dataHead *files = datalistInit("fakevector", 1);
+	uint16_t num_files = parse_file_cnt(file_paths);
+	char **files = parse_filepaths(file_paths, num_files);
+	uint32_t *sizes = parse_sizes(files, num_files);
+
+	char *vector = generate_vector();
+	init_gcrypt();
+	char **hashes = generate_hashes(files, num_files);
+	if (NULL == hashes)
+		exit(EXIT_FAILURE);
+
+	// Begin functionality demo
+	printf("generated vector: ");
+	fwrite(vector, 1, INIT_VEC_BYTES, stdout);
+	printf("\n");
+
+	for (int i = 0; i < num_files; i++) {
+		printf("Parsed file %.*s with encrypted size %d and hash:\n",
+		       NAME_BYTES, files[i], sizes[i]);
+		fwrite(hashes[i], 1, HASH_BYTES, stdout);
+		printf("\n");
+	}
+	// End demo
+
+	dataHead *dh = datalistInit(vector, num_files);
+	for (int i = 0; i < num_files; i++) {
+		datalistAppend(dh, files[i], sizes[i], hashes[i]);
+		free(files[i]);
+		free(hashes[i]);
+	}
+	free(files);
+	free(sizes);
+	free(hashes);
+
 	int status = EXIT_SUCCESS;
 
-	// TODO: Initialize the list nodes for each file to be transferred
-
-	bool ok = transfer(files, port, key);
+	bool ok = transfer(dh, port, key);
 	if (!ok) {
 		status = EXIT_FAILURE;
 		fprintf(stderr, "transferring files failed\n");
 	}
 
+	datalistDestroy(dh);
 	free(port);
 	free(key_path);
 	free(key);
+	free(file_paths);
+	free(vector);
 	return status;
 }
