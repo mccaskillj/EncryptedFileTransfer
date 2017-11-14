@@ -17,6 +17,8 @@
 #define SIZE_BYTES 4
 #define HASH_BYTES 64
 
+#define KEY_SIZE 32 // bytes
+
 void mem_error(void);
 
 #endif
