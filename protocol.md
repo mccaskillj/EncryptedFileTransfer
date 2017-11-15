@@ -7,7 +7,7 @@
 | Description | Payload Size (bytes) |
 |:------------|----:|
 | Number of files being sent | 2 |
-| Initialization vector | 32  |
+| Initialization vector | 16  |
 | File 1 name  | 255 |
 | File 1 encrypted size (bytes) | 4 |
 | File 1 hash (sha-512)  | 64  |

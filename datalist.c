@@ -7,10 +7,10 @@
  *  transfer specific fields
  */
 
+#include <arpa/inet.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <arpa/inet.h>
 
 #include "common.h"
 #include "datalist.h"

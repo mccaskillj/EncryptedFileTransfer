@@ -10,11 +10,11 @@ CFLAGS = -Wall -Werror -Wextra -pedantic -Wno-missing-braces -Wshadow -Wpointer-
 
 all: txer rxer
 
-txer: client.o parser.o datalist.o common.o
-	$(CC) $^ -o $@
+txer: client.o parser.o datalist.o common.o filesys.o
+	$(CC) $^ -o $@  `libgcrypt-config --cflags --libs`
 
-rxer: server.o parser.o datalist.o common.o
-	$(CC) $^ -o $@
+rxer: server.o parser.o datalist.o common.o filesys.o
+	$(CC) $^ -o $@  `libgcrypt-config --cflags --libs`
 
 server.o: server.c common.h
 
@@ -25,6 +25,8 @@ datalist.o: datalist.c common.h
 parser.o: parser.c common.h
 
 common.o: common.h
+
+filesys.o: filesys.h common.h
 
 clean:
 	$(RM) txer rxer *.o
