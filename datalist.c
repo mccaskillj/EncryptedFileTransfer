@@ -15,9 +15,9 @@
 #include "common.h"
 #include "datalist.h"
 
-dataHead *datalistInit(char *vector, int numFiles)
+data_head *datalist_init(char *vector)
 {
-	dataHead *list = malloc(sizeof(dataNode));
+	data_head *list = malloc(sizeof(data_node));
 	if (list == NULL)
 		mem_error();
 
@@ -26,7 +26,6 @@ dataHead *datalistInit(char *vector, int numFiles)
 		mem_error();
 
 	strncpy(list->vector, vector, INIT_VEC_BYTES);
-	list->numFiles = numFiles;
 	list->first = NULL;
 	list->last = NULL;
 	list->size = 0;
@@ -35,9 +34,9 @@ dataHead *datalistInit(char *vector, int numFiles)
 	return list;
 }
 
-static dataNode *datalistCreateNode(char *name, int size, char *hash)
+static data_node *datalist_create_node(char *name, int size, char *hash)
 {
-	dataNode *node = malloc(sizeof(dataNode));
+	data_node *node = malloc(sizeof(data_node));
 	if (node == NULL)
 		mem_error();
 
@@ -58,9 +57,9 @@ static dataNode *datalistCreateNode(char *name, int size, char *hash)
 	return node;
 }
 
-void datalistAppend(dataHead *list, char *name, int size, char *hash)
+void datalist_append(data_head *list, char *name, int size, char *hash)
 {
-	dataNode *newNode = datalistCreateNode(name, size, hash);
+	data_node *newNode = datalist_create_node(name, size, hash);
 	if (list->size == 0) {
 		list->first = newNode;
 		list->last = newNode;
@@ -73,7 +72,7 @@ void datalistAppend(dataHead *list, char *name, int size, char *hash)
 	list->size++;
 }
 
-void datalistRemove(dataHead *list, dataNode *node)
+void datalist_remove(data_head *list, data_node *node)
 {
 	if (list->size == 1) {
 		list->first = NULL;
@@ -101,58 +100,52 @@ void datalistRemove(dataHead *list, dataNode *node)
 	node = NULL;
 }
 
-static char *datalistCopyItem(dataNode *node, char *cpyLocation)
+static char *datalist_copy_item(data_node *node, char *copy_location)
 {
-	strncpy(cpyLocation, node->name, NAME_BYTES);
-	cpyLocation += NAME_BYTES;
-	*((uint32_t *)(cpyLocation)) = (uint32_t)htons(node->size);
-	cpyLocation += SIZE_BYTES;
-	strncpy(cpyLocation, node->hash, HASH_BYTES);
-	cpyLocation += HASH_BYTES;
-	strncpy(cpyLocation, "\n", 1);
-	cpyLocation += 1;
+	strncpy(copy_location, node->name, NAME_BYTES);
+	copy_location += NAME_BYTES;
+	*((uint32_t *)(copy_location)) = (uint32_t)htons(node->size);
+	copy_location += SIZE_BYTES;
+	strncpy(copy_location, node->hash, HASH_BYTES);
+	copy_location += HASH_BYTES;
 
-	return cpyLocation;
+	return copy_location;
 }
 
-char *datalistGeneratePayload(dataHead *list)
+char *datalist_generate_payload(data_head *list)
 {
 	char *payload;
-	char *cpyLocation;
-	dataNode *pos;
+	char *copy_location;
+	data_node *pos;
 
-	// size of the line plus a newline character
-	int lineSize = NAME_BYTES + SIZE_BYTES + HASH_BYTES + 1;
+	//size of the line
+	int line_size = NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 
-	// size of header portion including 2 newlines
-	int payloadSize = FILES_BYTES + INIT_VEC_BYTES + 2;
-	payloadSize += list->size * lineSize;
+	//size of header portion
+	int payload_size = FILES_BYTES + INIT_VEC_BYTES;
+	payload_size += list->size * line_size;
 
-	payload = calloc(payloadSize + 1, sizeof(char));
+	payload = calloc(payload_size + 1, sizeof(char));
 	if (payload == NULL)
 		mem_error();
 
-	cpyLocation = payload;
+	copy_location = payload;
 
-	*((uint16_t *)(cpyLocation)) = (uint16_t)htons(list->numFiles);
-	cpyLocation += FILES_BYTES;
-	strncpy(cpyLocation, "\n", 1);
-	cpyLocation += 1;
-	strncpy(cpyLocation, list->vector, INIT_VEC_BYTES);
-	cpyLocation += INIT_VEC_BYTES;
-	strncpy(cpyLocation, "\n", 1);
+	*((uint16_t *)(copy_location)) = (uint16_t)htons(list->size);
+	copy_location += FILES_BYTES;
+	strncpy(copy_location, list->vector, INIT_VEC_BYTES);
 
 	for (pos = list->first; pos != NULL; pos = pos->next) {
-		cpyLocation = datalistCopyItem(pos, cpyLocation);
+		copy_location = datalist_copy_item(pos, copy_location);
 	}
 
 	return payload;
 }
 
-void datalistDestroy(dataHead *list)
+void datalist_destroy(data_head *list)
 {
 	while (list->first != NULL)
-		datalistRemove(list, list->first);
+		datalist_remove(list, list->first);
 
 	free(list->vector);
 	list->vector = NULL;
@@ -160,12 +153,12 @@ void datalistDestroy(dataHead *list)
 	list = NULL;
 }
 
-dataNode *datalistGetIndex(dataHead *list, int index)
+data_node *datalist_get_index(data_head *list, int index)
 {
 	if (index >= list->size)
 		return NULL;
 
-	dataNode *node = list->first;
+	data_node *node = list->first;
 	for (int i = 0; i < index; i++, node = node->next)
 		;
 
