@@ -17,8 +17,25 @@
 #define SIZE_BYTES 4
 #define HASH_BYTES 64
 
-#define KEY_SIZE 32 // bytes
+#define AES_BLOCKSIZE 16
+#define KEY_SIZE 32	   // bytes
+#define HASH_CHUNK_SIZE 16384 // 2^14 for better large file performance
 
+/*
+ * Display an error message and exit when a memory allocation error
+ * occurs
+ */
 void mem_error(void);
+
+/*
+ * Initialize the gcrypt library
+ */
+void init_gcrypt();
+
+/*
+ * Return the number of padding bytes needed for a raw size to fit
+ * into the AES block size
+ */
+int padding_aes(int raw_size);
 
 #endif

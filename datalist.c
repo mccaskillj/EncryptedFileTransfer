@@ -7,10 +7,10 @@
  *  transfer specific fields
  */
 
+#include <arpa/inet.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
-#include <arpa/inet.h>
 
 #include "common.h"
 #include "datalist.h"
@@ -121,10 +121,10 @@ char *datalistGeneratePayload(dataHead *list)
 	char *cpyLocation;
 	dataNode *pos;
 
-	//size of the line plus a newline character
+	// size of the line plus a newline character
 	int lineSize = NAME_BYTES + SIZE_BYTES + HASH_BYTES + 1;
 
-	//size of header portion including 2 newlines
+	// size of header portion including 2 newlines
 	int payloadSize = FILES_BYTES + INIT_VEC_BYTES + 2;
 	payloadSize += list->size * lineSize;
 
