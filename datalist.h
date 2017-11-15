@@ -10,32 +10,31 @@
 #ifndef DATALIST_H
 #define DATALIST_H
 
-typedef struct dataNode {
-	struct dataNode *prev;
-	struct dataNode *next;
+typedef struct data_node {
+	struct data_node *prev;
+	struct data_node *next;
 	char *name;
 	int size;
 	char *hash;
-} dataNode;
+} data_node;
 
-typedef struct dataHead {
-	dataNode *first;
-	dataNode *last;
+typedef struct data_head {
+	data_node *first;
+	data_node *last;
 	int size;
 	char *vector;
-	int numFiles;
-} dataHead;
+} data_head;
 
-dataHead *datalistInit(char *vector, int numFiles);
+data_head *datalist_init(char *vector);
 
-void datalistAppend(dataHead *list, char *name, int size, char *hash);
+void datalist_append(data_head *list, char *name, int size, char *hash);
 
-void datalistRemove(dataHead *list, dataNode *node);
+void datalist_remove(data_head *list, data_node *node);
 
-void datalistDestroy(dataHead *list);
+void datalist_destroy(data_head *list);
 
-dataNode *datalistGetIndex(dataHead *list, int index);
+data_node *datalist_get_index(data_head *list, int index);
 
-char *datalistGeneratePayload(dataHead *list);
+char *datalist_generate_payload(data_head *list);
 
 #endif /*DATALIST_H*/

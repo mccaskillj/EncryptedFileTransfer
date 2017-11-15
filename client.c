@@ -94,7 +94,7 @@ static int open_socket(char *port)
 // Transfer files to the server at the specified address with the
 // given AES key. Returns true on successful transfer of all non-duplicate
 // files, false otherwise.
-static bool transfer(dataHead *files, char *port, char *key)
+static bool transfer(data_head *files, char *port, char *key)
 {
 	(void)files;
 	(void)port;
@@ -299,9 +299,9 @@ int main(int argc, char *argv[])
 	}
 	// End demo
 
-	dataHead *dh = datalistInit(vector, num_files);
+	data_head *dh = datalist_init(vector);
 	for (int i = 0; i < num_files; i++) {
-		datalistAppend(dh, files[i], sizes[i], hashes[i]);
+		datalist_append(dh, files[i], sizes[i], hashes[i]);
 		free(files[i]);
 		free(hashes[i]);
 	}
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "transferring files failed\n");
 	}
 
-	datalistDestroy(dh);
+	datalist_destroy(dh);
 	free(port);
 	free(key_path);
 	free(key);
