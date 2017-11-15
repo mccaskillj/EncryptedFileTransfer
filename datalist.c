@@ -142,7 +142,7 @@ char *datalist_generate_payload(data_head *list)
 	return payload;
 }
 
-void datalistDestroy(data_head *list)
+void datalist_destroy(data_head *list)
 {
 	while (list->first != NULL)
 		datalist_remove(list, list->first);
@@ -153,7 +153,7 @@ void datalistDestroy(data_head *list)
 	list = NULL;
 }
 
-data_node *datalistGetIndex(data_head *list, int index)
+data_node *datalist_get_index(data_head *list, int index)
 {
 	if (index >= list->size)
 		return NULL;

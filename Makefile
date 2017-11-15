@@ -22,7 +22,7 @@ client.o: client.c common.h
 
 datalist.o: datalist.c common.h
 
-parser.o: parser.c common.h
+parser.o: parser.c datalist.h common.h
 
 common.o: common.h
 
