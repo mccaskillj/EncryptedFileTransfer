@@ -23,10 +23,9 @@ typedef struct data_head {
 	data_node *last;
 	int size;
 	char *vector;
-	int num_files;
 } data_head;
 
-data_head *datalist_init(char *vector, int num_files);
+data_head *datalist_init(char *vector);
 
 void datalist_append(data_head *list, char *name, int size, char *hash);
 

@@ -18,20 +18,20 @@ static void header_add_node(data_head *list, char *file_data)
 data_head *header_parse(char *header)
 {
 	int num_files;
-	char *tok;
-	const char delimiter[2] = "\n";
+	char *read_loc = header;
 
-	tok = strtok(header, delimiter);
-	num_files = ntohs(*tok);
-	
-	tok = strtok(header, delimiter);
-	data_head *list = datalist_init(tok, num_files);
+	num_files = ntohs(*read_loc);
+	read_loc += FILES_BYTES;
 
-	tok = strtok(header, delimiter);
-	while (tok != NULL) {
-		header_add_node(list, tok);
-		tok = strtok(header, delimiter);
+	data_head *list = datalist_init(read_loc);
+	read_loc += INIT_VEC_BYTES;
+
+	for (int i = 0; i < num_files; i++) {
+		header_add_node(list, read_loc);
+		read_loc += NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 	}
+
+	read_loc = NULL;
 
 	return list;
 }

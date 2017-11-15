@@ -15,7 +15,7 @@
 #include "common.h"
 #include "datalist.h"
 
-data_head *datalist_init(char *vector, int num_files)
+data_head *datalist_init(char *vector)
 {
 	data_head *list = malloc(sizeof(data_node));
 	if (list == NULL)
@@ -26,7 +26,6 @@ data_head *datalist_init(char *vector, int num_files)
 		mem_error();
 
 	strncpy(list->vector, vector, INIT_VEC_BYTES);
-	list->num_files = num_files;
 	list->first = NULL;
 	list->last = NULL;
 	list->size = 0;
@@ -132,7 +131,7 @@ char *datalist_generate_payload(data_head *list)
 
 	copy_location = payload;
 
-	*((uint16_t *)(copy_location)) = (uint16_t)htons(list->num_files);
+	*((uint16_t *)(copy_location)) = (uint16_t)htons(list->size);
 	copy_location += FILES_BYTES;
 	strncpy(copy_location, list->vector, INIT_VEC_BYTES);
 
