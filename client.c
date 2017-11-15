@@ -6,9 +6,11 @@
  *  Purpose: Client (txer) entry point.
  */
 
+#include <fcntl.h>
 #include <gcrypt.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <math.h>
 #include <netdb.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -234,6 +236,114 @@ static uint16_t parse_file_cnt(char *files_arg)
 	return file_cnt;
 }
 
+/*
+ * Read the contents in the file
+ */
+static char *read_file(char *filepath, size_t filesize)
+{
+	char *filedata = NULL;
+	mode_t mode = S_IRUSR | S_IRGRP | S_IROTH;
+	int fd = open(filepath, O_RDONLY, mode);
+	int bytesread = -1;
+
+	if (fd == -1) {
+		perror("file open error");
+		exit(EXIT_FAILURE);
+	}
+
+	filedata = malloc(filesize + 1);
+	if (filedata == NULL)
+		mem_error();
+
+	memset(filedata, 0, filesize + 1);
+
+	bytesread = read(fd, filedata, filesize);
+
+	if (bytesread == -1) {
+		close(fd);
+		perror("file read error");
+		exit(EXIT_FAILURE);
+	}
+
+	close(fd);
+
+	return filedata;
+}
+
+/*
+ * Encrypt the file at a given index in the linked list. The encryption is done
+ * on the vector and key passed it.
+ */
+static unsigned char *encrypt_file(dataHead *dh, int index, char *vector,
+				   char *key)
+{
+	dataNode *node = datalistGetIndex(dh, index);
+
+	if (node == NULL)
+		return NULL;
+
+	char *data = read_file(node->name, node->size);
+	int rawsize = strlen(data);
+	int size = rawsize + padding_aes(rawsize);
+
+	gcry_cipher_hd_t hd;
+	gcry_error_t err = 0;
+
+	err =
+	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
+	g_error(err);
+
+	// Set the key for ciphering
+	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
+	g_error(err);
+
+	// Set the init vector
+	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
+	g_error(err);
+
+	unsigned char *encry_data = malloc(size);
+	if (encry_data == NULL)
+		mem_error();
+
+	memset(encry_data, 0, size);
+
+	size_t encry_bufsize = size;
+	size_t encry_inlen = size;
+
+	// Encrypt the data into a buffer
+	err = gcry_cipher_encrypt(hd, encry_data, encry_bufsize,
+				  (unsigned char *)data, encry_inlen);
+	g_error(err);
+
+	// Left here for demo purposes
+	printf("encrypted data: %s\n", encry_data);
+	fflush(stdout);
+
+	// Clear the handle, the key doesn't get cleared
+	err = gcry_cipher_reset(hd);
+	g_error(err);
+
+	// Set the init vector
+	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
+	g_error(err);
+
+	// All this will be moved to the server side.
+	unsigned char decry_out[size];
+	memset(decry_out, 0, size);
+
+	// Decrypt the encrypted data and print it out for demo purposes
+	err =
+	    gcry_cipher_decrypt(hd, decry_out, size, encry_data, encry_bufsize);
+	g_error(err);
+
+	printf("decrypted data:\n%s\n", decry_out);
+	// Up till here
+
+	gcry_cipher_close(hd);
+	free(data);
+	return encry_data;
+}
+
 int main(int argc, char *argv[])
 {
 	int opt = 0;
@@ -305,6 +415,17 @@ int main(int argc, char *argv[])
 		free(files[i]);
 		free(hashes[i]);
 	}
+
+	// For demo purposes, encryption function just on the first 2 files
+	// passed in
+	unsigned char *edata = encrypt_file(dh, 0, vector, key);
+	if (edata != NULL)
+		free(edata);
+
+	edata = encrypt_file(dh, 1, vector, key);
+	if (edata != NULL)
+		free(edata);
+
 	free(files);
 	free(sizes);
 	free(hashes);

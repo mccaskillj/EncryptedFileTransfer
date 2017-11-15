@@ -9,6 +9,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <gcrypt.h>
+
 #define DEFAULT_SERVER_PORT "6060"
 
 #define FILES_BYTES 2
@@ -20,6 +22,11 @@
 #define AES_BLOCKSIZE 16
 #define KEY_SIZE 32	   // bytes
 #define HASH_CHUNK_SIZE 16384 // 2^14 for better large file performance
+
+/*
+ * Checks if the return value from any gcry functions contains an error or not
+ */
+void g_error(gcry_error_t err);
 
 /*
  * Display an error message and exit when a memory allocation error

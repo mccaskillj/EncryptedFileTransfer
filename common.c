@@ -12,24 +12,6 @@
 
 #include "common.h"
 
-/*
- * Returns the lowest multiple of the number
- * Parameters: number - the number that the lowest multiple is being found for
- *	       multiple - the multiple of this number
- */
-int lowest_multiple(int number, int multiple)
-{
-	int lowest_multiple = multiple;
-
-	while (lowest_multiple < number)
-		lowest_multiple += multiple;
-
-	return lowest_multiple;
-}
-
-/*
- * Checks if the return value from any gcry functions contains an error or not
- */
 void g_error(gcry_error_t err)
 {
 	if (err) {
