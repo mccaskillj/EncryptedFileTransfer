@@ -109,8 +109,6 @@ static char *datalist_copy_item(data_node *node, char *copy_location)
 	copy_location += SIZE_BYTES;
 	strncpy(copy_location, node->hash, HASH_BYTES);
 	copy_location += HASH_BYTES;
-	strncpy(copy_location, "\n", 1);
-	copy_location += 1;
 
 	return copy_location;
 }
@@ -121,11 +119,11 @@ char *datalist_generate_payload(data_head *list)
 	char *copy_location;
 	data_node *pos;
 
-	//size of the line plus a newline character
-	int line_size = NAME_BYTES + SIZE_BYTES + HASH_BYTES + 1;
+	//size of the line
+	int line_size = NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 
-	//size of header portion including 2 newlines
-	int payload_size = FILES_BYTES + INIT_VEC_BYTES + 2;
+	//size of header portion
+	int payload_size = FILES_BYTES + INIT_VEC_BYTES;
 	payload_size += list->size * line_size;
 
 	payload = calloc(payload_size + 1, sizeof(char));
@@ -136,11 +134,7 @@ char *datalist_generate_payload(data_head *list)
 
 	*((uint16_t *)(copy_location)) = (uint16_t)htons(list->num_files);
 	copy_location += FILES_BYTES;
-	strncpy(copy_location, "\n", 1);
-	copy_location += 1;
 	strncpy(copy_location, list->vector, INIT_VEC_BYTES);
-	copy_location += INIT_VEC_BYTES;
-	strncpy(copy_location, "\n", 1);
 
 	for (pos = list->first; pos != NULL; pos = pos->next) {
 		copy_location = datalist_copy_item(pos, copy_location);
