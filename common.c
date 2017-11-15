@@ -12,6 +12,15 @@
 
 #include "common.h"
 
+void g_error(gcry_error_t err)
+{
+	if (err) {
+		fprintf(stderr, "Failure: %s/%s\n", gcry_strsource(err),
+			gcry_strerror(err));
+		exit(EXIT_FAILURE);
+	}
+}
+
 void mem_error(void)
 {
 	fprintf(stderr, "malloc failed\n");
