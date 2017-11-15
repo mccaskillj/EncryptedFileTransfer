@@ -274,10 +274,10 @@ static char *read_file(char *filepath, size_t filesize)
  * Encrypt the file at a given index in the linked list. The encryption is done
  * on the vector and key passed it.
  */
-static unsigned char *encrypt_file(dataHead *dh, int index, char *vector,
+static unsigned char *encrypt_file(data_head *dh, int index, char *vector,
 				   char *key)
 {
-	dataNode *node = datalistGetIndex(dh, index);
+	data_node *node = datalist_get_index(dh, index);
 
 	if (node == NULL)
 		return NULL;
@@ -407,6 +407,8 @@ int main(int argc, char *argv[])
 		fwrite(hashes[i], 1, HASH_BYTES, stdout);
 		printf("\n");
 	}
+
+	fflush(stdout);
 	// End demo
 
 	data_head *dh = datalist_init(vector);
