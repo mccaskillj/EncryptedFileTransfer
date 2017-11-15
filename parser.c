@@ -6,30 +6,30 @@
 #include "datalist.h"
 #include "common.h"
 
-static void headerAddNode(dataHead *list, char *fileData)
+static void header_add_node(data_head *list, char *file_data)
 {
-	char *name = fileData;
-	int size = ntohl(fileData[NAME_BYTES]);
-	char *hash = &fileData[NAME_BYTES + SIZE_BYTES];
+	char *name = file_data;
+	int size = ntohl(file_data[NAME_BYTES]);
+	char *hash = &file_data[NAME_BYTES + SIZE_BYTES];
 
-	datalistAppend(list, name, size, hash);
+	datalist_append(list, name, size, hash);
 }
 
-dataHead *headerParse(char *header)
+data_head *header_parse(char *header)
 {
-	int numFiles;
+	int num_files;
 	char *tok;
 	const char delimiter[2] = "\n";
 
 	tok = strtok(header, delimiter);
-	numFiles = ntohs(*tok);
+	num_files = ntohs(*tok);
 	
 	tok = strtok(header, delimiter);
-	dataHead *list = datalistInit(tok, numFiles);
+	data_head *list = datalist_init(tok, num_files);
 
 	tok = strtok(header, delimiter);
 	while (tok != NULL) {
-		headerAddNode(list, tok);
+		header_add_node(list, tok);
 		tok = strtok(header, delimiter);
 	}
 
