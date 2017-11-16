@@ -14,8 +14,11 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #include "common.h"
+#include "datalist.h"
+#include "parser.h"
 
 #define BACKLOG 10
 
@@ -32,9 +35,102 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
+static char *read_initial_header(int socketfd)
+{
+	uint64_t total_read = 0;
+	uint64_t read = 0;
+	uint32_t header_size = FILES_BYTES + INIT_VEC_BYTES;
+	uint64_t files_info = NAME_BYTES + SIZE_BYTES + HASH_BYTES;
+	char *buf;
+
+	char initial_read[header_size + 1];
+	memset(initial_read, 0, header_size + 1);
+
+	while (header_size - total_read != 0) {
+		read = recv(socketfd, initial_read, header_size - total_read, 0);
+		total_read += read;
+	}
+
+	files_info = files_info * ntohs(*initial_read);
+
+	buf = calloc((header_size + files_info + 1),sizeof(char));
+	if (buf == NULL)
+		mem_error();
+	memcpy(buf, initial_read, header_size);
+
+	while (files_info - total_read != 0) {
+		read = recv(socketfd, &buf[total_read], files_info - total_read, 0);
+		total_read += read;
+	}
+
+	return buf;
+}
+
+static uint8_t save_file(int socketfd, data_head **list, uint32_t *pos)
+{
+	uint64_t read = 0;
+	uint64_t total_read = 0;
+	data_node *node = datalist_get_index(*list, *pos);
+	char *buf = malloc(sizeof(char) * node->size);
+	if (buf == NULL)
+		mem_error();
+
+	while (node->size - total_read != 0) {
+		read = recv(socketfd, &buf[total_read], node->size - total_read, 0);
+		total_read += read;
+	}
+
+/*
+	decrypt the file and generate hash
+*/
+
+/*	
+	check if file matches and return uint8_t 0 on no match
+*/
+
+/*
+	save file to correct directory location
+*/
+
+	return (uint8_t)1;
+}
+
+static void read_from_client(int socketfd, data_head **list, uint32_t *pos)
+{
+	uint32_t sent = 0;
+	uint32_t sent_total = 0;
+	char *read_val;
+	char return_string[RETURN_SIZE];
+	memset(return_string, 0, 3);
+	uint8_t status;
+
+	if (*list == NULL) {
+		read_val = read_initial_header(socketfd);
+		*list = header_parse(read_val);
+		free(read_val);
+
+		*((uint16_t *)(return_string)) = htons(*pos);
+		return_string[RETURN_SIZE - 1] = 1;
+	} else {
+		status = save_file(socketfd, list, pos);
+		*pos = *pos + 1;
+
+		*((uint16_t *)(return_string)) = htons(*pos);
+		return_string[RETURN_SIZE - 1] = status;
+	}
+
+	while (RETURN_SIZE - sent_total != 0) {
+		sent = send(socketfd, &return_string[sent_total], RETURN_SIZE - sent_total, 0);
+		sent_total += sent;
+	}
+
+}
+
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
+	data_head *list = NULL;
+	uint32_t pos = 0;
 
 	while (1) {
 		// Structs for storing the sender's address and port
@@ -60,10 +156,9 @@ static void accept_connection(int socketfd)
 
 		// Child process; sends a stream of bytes to the sender
 		if (pid == 0) {
-			char *response = "Connection Established\n";
-			send(recvfd, response, strlen(response), 0);
+			read_from_client(socketfd, &list, &pos);
 			break;
-			// Parent process; loop back to accept more connections
+		// Parent process; loop back to accept more connections
 		} else {
 			close(recvfd);
 			continue;

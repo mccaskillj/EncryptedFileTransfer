@@ -18,6 +18,7 @@
 #define NAME_BYTES 255
 #define SIZE_BYTES 4
 #define HASH_BYTES 64
+#define RETURN_SIZE 3
 
 #define AES_BLOCKSIZE 16
 #define KEY_SIZE 32	   // bytes
