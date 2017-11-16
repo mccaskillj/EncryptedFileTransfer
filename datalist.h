@@ -10,30 +10,32 @@
 #ifndef DATALIST_H
 #define DATALIST_H
 
+#include <stdint.h>
+
 typedef struct data_node {
 	struct data_node *prev;
 	struct data_node *next;
 	char *name;
-	int size;
+	uint32_t size;
 	char *hash;
 } data_node;
 
 typedef struct data_head {
 	data_node *first;
 	data_node *last;
-	int size;
+	uint32_t size;
 	char *vector;
 } data_head;
 
 data_head *datalist_init(char *vector);
 
-void datalist_append(data_head *list, char *name, int size, char *hash);
+void datalist_append(data_head *list, char *name, uint32_t size, char *hash);
 
 void datalist_remove(data_head *list, data_node *node);
 
 void datalist_destroy(data_head *list);
 
-data_node *datalist_get_index(data_head *list, int index);
+data_node *datalist_get_index(data_head *list, uint32_t index);
 
 char *datalist_generate_payload(data_head *list);
 

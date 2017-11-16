@@ -34,7 +34,7 @@ data_head *datalist_init(char *vector)
 	return list;
 }
 
-static data_node *datalist_create_node(char *name, int size, char *hash)
+static data_node *datalist_create_node(char *name, uint32_t size, char *hash)
 {
 	data_node *node = malloc(sizeof(data_node));
 	if (node == NULL)
@@ -57,7 +57,7 @@ static data_node *datalist_create_node(char *name, int size, char *hash)
 	return node;
 }
 
-void datalist_append(data_head *list, char *name, int size, char *hash)
+void datalist_append(data_head *list, char *name, uint32_t size, char *hash)
 {
 	data_node *newNode = datalist_create_node(name, size, hash);
 	if (list->size == 0) {
@@ -122,7 +122,7 @@ char *datalist_generate_payload(data_head *list)
 	int line_size = NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 
 	//size of header portion
-	int payload_size = FILES_BYTES + INIT_VEC_BYTES;
+	uint32_t payload_size = FILES_BYTES + INIT_VEC_BYTES;
 	payload_size += list->size * line_size;
 
 	payload = calloc(payload_size + 1, sizeof(char));
@@ -153,13 +153,13 @@ void datalist_destroy(data_head *list)
 	list = NULL;
 }
 
-data_node *datalist_get_index(data_head *list, int index)
+data_node *datalist_get_index(data_head *list, uint32_t index)
 {
 	if (index >= list->size)
 		return NULL;
 
 	data_node *node = list->first;
-	for (int i = 0; i < index; i++, node = node->next)
+	for (uint32_t i = 0; i < index; i++, node = node->next)
 		;
 
 	return node;
