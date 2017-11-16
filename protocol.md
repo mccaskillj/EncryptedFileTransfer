@@ -33,3 +33,50 @@ Note: The pass/fail byte will be empty for the first file requested by the serve
 
 - After the file has been received by the server, the server will respond to the client with the end of transfer header until all non-duplicate files have been read. The server will close the connection when done receiving files.
 
+### Server Directory Structure
+
+The server maintains a directory structure starting in the directory the server is ran.
+
+The server will maintain a directory called "keys", which contains files with client keys for decryption. The files are named using the clients "ip:port".
+
+The server will store received files in a per-client directory. Each clients directory contains a sub directory for received files (maintaining the original filename), and a sub directory for hashes.
+
+Example structure:
+
+<pre>
+rxer
+│
+│
+│
+└───received
+│   │
+│   │
+│   │
+│   └───127.0.0.2:6060
+│   │   │
+│   │   └───hashes
+│   │   │   │   SHA512
+│   │   │   │   SHA512
+│   │   │
+│   │   └───files
+│   │       │   something1.txt
+│   │       │   something2.txt
+│   │
+│   │
+│   │
+│   └───127.0.0.9:6060
+│       │
+│       └───hashes
+│       │   │   SHA512
+│       │   │   SHA512
+│       │
+│       └───files
+│           │   rocktalk.txt
+│           │   passwords.txt
+│
+│
+│
+└───keys
+    │   127.0.0.2:6060
+    │   127.0.0.9:6060
+</pre>
