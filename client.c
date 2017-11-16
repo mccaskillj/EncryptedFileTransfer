@@ -6,103 +6,39 @@
  *  Purpose: Client (txer) entry point.
  */
 
-#include <fcntl.h>
 #include <gcrypt.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <math.h>
-#include <netdb.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "common.h"
 #include "datalist.h"
 #include "filesys.h"
+#include "net.h"
+#include "parser.h"
+
+#define HASH_CHUNK_SIZE 2 << 14    // 2^14 for better large file performance
+#define ENCRYPT_CHUNK_SIZE 2 << 10 // ~1.5x MTU
 
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
 
 	fprintf(stderr,
-		"Usage: %s [-k key][-f files][-p port][-h]\n\n"
+		"Usage: %s -f files [-k key][-p port][-h]\n\n"
 		"Options:\n"
-		"-k Path to 256 bit AES encryption key (default %s)\n"
 		"-f Comma separated path(s) to file(s) to transfer (eg: "
 		"file1,file2)\n"
+		"-k Path to 256 bit AES encryption key (default %s)\n"
 		"-p Port to connect to server (default %s)\n"
 		"-h Help\n\n",
 		bin, DEFAULT_KEY_PATH, DEFAULT_SERVER_PORT);
 	exit(exit_status);
-}
-
-static int open_socket(char *port)
-{
-	struct addrinfo hints, *results, *p;
-	int socketfd = 0, rv;
-	int size = strlen("Connection Established\n");
-
-	// Initialize hints and set the options for a TCP connection
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-
-	// Get avaliable address, ports
-	rv = getaddrinfo(NULL, port, &hints, &results);
-	if (rv == -1) {
-		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
-		exit(EXIT_FAILURE);
-	}
-
-	// Loop through all the results and connect to the first we can
-	for (p = results; p != NULL; p = p->ai_next) {
-		socketfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-		if (socketfd == -1) {
-			perror("client socket error");
-			continue;
-		}
-
-		rv = connect(socketfd, p->ai_addr, p->ai_addrlen);
-		if (rv == -1) {
-			close(socketfd);
-			perror("client connect errror");
-			continue;
-		}
-
-		// Connection was established
-		break;
-	}
-
-	if (p == NULL) {
-		perror("client failed to connect");
-		exit(EXIT_FAILURE);
-	}
-
-	freeaddrinfo(results);
-
-	// This can go, it's for checking if the data can be received.
-	char buf[size];
-	recv(socketfd, buf, size, 0);
-	printf("%s", buf);
-
-	return socketfd;
-}
-
-// Transfer files to the server at the specified address with the
-// given AES key. Returns true on successful transfer of all non-duplicate
-// files, false otherwise.
-static bool transfer(data_head *files, char *port, char *key)
-{
-	(void)files;
-	(void)port;
-	(void)key;
-	open_socket(port);
-	return false;
 }
 
 /*
@@ -237,55 +173,34 @@ static uint16_t parse_file_cnt(char *files_arg)
 }
 
 /*
- * Read the contents in the file
+ * Initialize the file transfer with the server by sending the file
+ * transfer header. Returns index of file requested by server, -1
+ * otherwise.
  */
-static char *read_file(char *filepath, size_t filesize)
+static int init_transfer(int serv, data_head *dh)
 {
-	char *filedata = NULL;
-	mode_t mode = S_IRUSR | S_IRGRP | S_IROTH;
-	int fd = open(filepath, O_RDONLY, mode);
-	int bytesread = -1;
+	char *transfer_header = datalist_generate_payload(dh);
+	int header_len = HEADER_INIT_SIZE + (dh->size * HEADER_LINE_SIZE);
 
-	if (fd == -1) {
-		perror("file open error");
-		exit(EXIT_FAILURE);
-	}
+	int n = write_all(serv, transfer_header, header_len);
+	if (n != header_len)
+		return -1;
 
-	filedata = malloc(filesize + 1);
-	if (filedata == NULL)
-		mem_error();
+	char request[RETURN_SIZE];
+	n = recv(serv, request, RETURN_SIZE, 0);
+	if (n != RETURN_SIZE)
+		return -1;
 
-	memset(filedata, 0, filesize + 1);
-
-	bytesread = read(fd, filedata, filesize);
-
-	if (bytesread == -1) {
-		close(fd);
-		perror("file read error");
-		exit(EXIT_FAILURE);
-	}
-
-	close(fd);
-
-	return filedata;
+	return parse_next_file(request);
 }
 
 /*
- * Encrypt the file at a given index in the linked list. The encryption is done
- * on the vector and key passed it.
+ * Encrypt a chunk of data of size src_len from src into dst with the
+ * provided key
  */
-static unsigned char *encrypt_file(data_head *dh, int index, char *vector,
-				   char *key)
+static void encrypt_chunk(char *dst, char *src, int src_len, char *key,
+			  char *vector)
 {
-	data_node *node = datalist_get_index(dh, index);
-
-	if (node == NULL)
-		return NULL;
-
-	char *data = read_file(node->name, node->size);
-	int rawsize = strlen(data);
-	int size = rawsize + padding_aes(rawsize);
-
 	gcry_cipher_hd_t hd;
 	gcry_error_t err = 0;
 
@@ -293,55 +208,122 @@ static unsigned char *encrypt_file(data_head *dh, int index, char *vector,
 	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
 	g_error(err);
 
-	// Set the key for ciphering
 	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
 	g_error(err);
 
-	// Set the init vector
 	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
 	g_error(err);
 
-	unsigned char *encry_data = malloc(size);
-	if (encry_data == NULL)
-		mem_error();
-
-	memset(encry_data, 0, size);
-
-	size_t encry_bufsize = size;
-	size_t encry_inlen = size;
-
-	// Encrypt the data into a buffer
-	err = gcry_cipher_encrypt(hd, encry_data, encry_bufsize,
-				  (unsigned char *)data, encry_inlen);
+	err = gcry_cipher_encrypt(hd, src, src_len, (unsigned char *)dst,
+				  src_len);
 	g_error(err);
+}
 
-	// Left here for demo purposes
-	printf("encrypted data: %s\n", encry_data);
-	fflush(stdout);
+/*
+ * Encrypt and Write specified file to the server. Returns true if
+ * the file is encrypted and written entirely, false otherwise.
+ */
+static bool send_file(int sfd, char *key, char *vector, char *filepath)
+{
+	FILE *f = fopen(filepath, "r");
+	if (NULL == f)
+		return false;
 
-	// Clear the handle, the key doesn't get cleared
-	err = gcry_cipher_reset(hd);
-	g_error(err);
+	// We will re-use the buffers for efficiency
+	char f_buf[ENCRYPT_CHUNK_SIZE];
+	char enc_buf[ENCRYPT_CHUNK_SIZE];
 
-	// Set the init vector
-	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
-	g_error(err);
+	// Read a chunk fo the file, encrypt, and write to server
+	int len;
+	while (1) {
+		// TODO: optimize by memset'ing what we don't in the buffers
+		memset(f_buf, 0, ENCRYPT_CHUNK_SIZE);
+		memset(enc_buf, 0, ENCRYPT_CHUNK_SIZE);
 
-	// All this will be moved to the server side.
-	unsigned char decry_out[size];
-	memset(decry_out, 0, size);
+		len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+		encrypt_chunk(enc_buf, f_buf, len, key, vector);
 
-	// Decrypt the encrypted data and print it out for demo purposes
-	err =
-	    gcry_cipher_decrypt(hd, decry_out, size, encry_data, encry_bufsize);
-	g_error(err);
+		int n = write_all(sfd, enc_buf, len);
+		if (n < len) {
+			fprintf(stderr, "failed to write encoded buffer\n");
+			fclose(f);
+			return false;
+		}
 
-	printf("decrypted data:\n%s\n", decry_out);
-	// Up till here
+		if (len < ENCRYPT_CHUNK_SIZE)
+			break;
+	}
 
-	gcry_cipher_close(hd);
-	free(data);
-	return encry_data;
+	fclose(f);
+	return true;
+}
+
+/*
+ * Transfer comma separated files to the server at the specified address
+ * with the given AES key. Returns true on successful transfer of all
+ * non-duplicate files, false otherwise.
+ */
+static bool transfer_files(char *port, char *comma_files, char *key)
+{
+	// Prep for transfer
+	uint16_t num_files = parse_file_cnt(comma_files);
+	char **files = parse_filepaths(comma_files, num_files);
+	uint32_t *sizes = parse_sizes(files, num_files);
+
+	char *vector = generate_vector();
+	init_gcrypt();
+	char **hashes = generate_hashes(files, num_files);
+	if (NULL == hashes)
+		exit(EXIT_FAILURE);
+
+	// Initialize the transfer by sending the initialization header
+	data_head *dh = datalist_init(vector);
+	for (int i = 0; i < num_files; i++) {
+		datalist_append(dh, files[i], sizes[i], hashes[i]);
+	}
+
+	fprintf(stdout, "connecting to server\n");
+	int sfd = client_socket(port);
+	uint32_t requested_idx = init_transfer(sfd, dh);
+	fprintf(stdout, "got first file request for file %d\n", requested_idx);
+
+	char resp_buf[RETURN_SIZE]; // Server response after file sent
+	bool all_sent = true;
+
+	// We send any files the server requests
+	while (requested_idx > 0 && requested_idx <= num_files) {
+		int idx = requested_idx - 1; // 1 based in protocol
+		fprintf(stdout, "transfering %.*s...\n", NAME_BYTES,
+			files[idx]);
+		bool ok = send_file(sfd, key, vector, files[idx]);
+		if (!ok) {
+			fprintf(stderr, "writing file failed\n");
+			all_sent = false;
+			break;
+		}
+
+		int n = recv(sfd, resp_buf, RETURN_SIZE, 0);
+		if (n != RETURN_SIZE) {
+			fprintf(stderr, "bad transfer response\n");
+			all_sent = false;
+			break;
+		}
+
+		requested_idx = parse_next_file(resp_buf);
+	}
+
+	// Cleanup
+	for (int i = 0; i < num_files; i++) {
+		free(files[i]);
+		free(hashes[i]);
+	}
+
+	free(files);
+	free(hashes);
+	free(sizes);
+	free(vector);
+	datalist_destroy(dh);
+	return all_sent;
 }
 
 int main(int argc, char *argv[])
@@ -386,65 +368,17 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	uint16_t num_files = parse_file_cnt(file_paths);
-	char **files = parse_filepaths(file_paths, num_files);
-	uint32_t *sizes = parse_sizes(files, num_files);
-
-	char *vector = generate_vector();
-	init_gcrypt();
-	char **hashes = generate_hashes(files, num_files);
-	if (NULL == hashes)
-		exit(EXIT_FAILURE);
-
-	// Begin functionality demo
-	printf("generated vector: ");
-	fwrite(vector, 1, INIT_VEC_BYTES, stdout);
-	printf("\n");
-
-	for (int i = 0; i < num_files; i++) {
-		printf("Parsed file %.*s with encrypted size %d and hash:\n",
-		       NAME_BYTES, files[i], sizes[i]);
-		fwrite(hashes[i], 1, HASH_BYTES, stdout);
-		printf("\n");
-	}
-
-	fflush(stdout);
-	// End demo
-
-	data_head *dh = datalist_init(vector);
-	for (int i = 0; i < num_files; i++) {
-		datalist_append(dh, files[i], sizes[i], hashes[i]);
-		free(files[i]);
-		free(hashes[i]);
-	}
-
-	// For demo purposes, encryption function just on the first 2 files
-	// passed in
-	unsigned char *edata = encrypt_file(dh, 0, vector, key);
-	if (edata != NULL)
-		free(edata);
-
-	edata = encrypt_file(dh, 1, vector, key);
-	if (edata != NULL)
-		free(edata);
-
-	free(files);
-	free(sizes);
-	free(hashes);
-
 	int status = EXIT_SUCCESS;
 
-	bool ok = transfer(dh, port, key);
+	bool ok = transfer_files(port, file_paths, key);
 	if (!ok) {
 		status = EXIT_FAILURE;
 		fprintf(stderr, "transferring files failed\n");
 	}
 
-	datalist_destroy(dh);
 	free(port);
 	free(key_path);
 	free(key);
 	free(file_paths);
-	free(vector);
 	return status;
 }

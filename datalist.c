@@ -118,12 +118,8 @@ char *datalist_generate_payload(data_head *list)
 	char *copy_location;
 	data_node *pos;
 
-	//size of the line
-	int line_size = NAME_BYTES + SIZE_BYTES + HASH_BYTES;
-
-	//size of header portion
-	uint32_t payload_size = FILES_BYTES + INIT_VEC_BYTES;
-	payload_size += list->size * line_size;
+	int payload_size = HEADER_INIT_SIZE;
+	payload_size += list->size * HEADER_LINE_SIZE;
 
 	payload = calloc(payload_size + 1, sizeof(char));
 	if (payload == NULL)

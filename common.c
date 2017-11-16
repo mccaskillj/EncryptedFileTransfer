@@ -15,7 +15,7 @@
 void g_error(gcry_error_t err)
 {
 	if (err) {
-		fprintf(stderr, "Failure: %s/%s\n", gcry_strsource(err),
+		fprintf(stderr, "gcrypt fatal error: %s/%s\n", gcry_strsource(err),
 			gcry_strerror(err));
 		exit(EXIT_FAILURE);
 	}

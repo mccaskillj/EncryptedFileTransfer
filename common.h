@@ -18,11 +18,13 @@
 #define NAME_BYTES 255
 #define SIZE_BYTES 4
 #define HASH_BYTES 64
-#define RETURN_SIZE 3
+#define RETURN_SIZE 3 // Response from server
 
-#define AES_BLOCKSIZE 16
-#define KEY_SIZE 32	   // bytes
-#define HASH_CHUNK_SIZE 16384 // 2^14 for better large file performance
+#define HEADER_INIT_SIZE FILES_BYTES + INIT_VEC_BYTES
+#define HEADER_LINE_SIZE NAME_BYTES + SIZE_BYTES + HASH_BYTES
+
+#define AES_BLOCKSIZE 16	// bytes - 128 bits
+#define KEY_SIZE 32		// bytes - 256 bits
 
 /*
  * Checks if the return value from any gcry functions contains an error or not

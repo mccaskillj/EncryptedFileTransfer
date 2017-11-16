@@ -1,10 +1,10 @@
-#include <string.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "parser.h"
-#include "datalist.h"
 #include "common.h"
+#include "datalist.h"
+#include "parser.h"
 
 static void header_add_node(data_head *list, char *file_data)
 {
@@ -35,3 +35,13 @@ data_head *header_parse(char *header)
 
 	return list;
 }
+
+uint16_t parse_next_file(char *request)
+{
+	uint16_t next = 0;
+	next += request[1];
+	next += request[0] << 8;
+	return next;
+}
+
+uint8_t parse_transfer_status(char *request) { return request[2]; }
