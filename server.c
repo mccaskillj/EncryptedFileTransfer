@@ -177,7 +177,8 @@ static void accept_connection(int socketfd)
 		// Child process; sends a stream of bytes to the sender
 		if (pid == 0) {
 			close(socketfd);
-			read_from_client(recvfd, &list, &pos);
+			while (list == NULL || pos <= list->size)
+				read_from_client(recvfd, &list, &pos);
 			close(recvfd);
 			fprintf(stdout, "done reading files from client\n");
 			break;
