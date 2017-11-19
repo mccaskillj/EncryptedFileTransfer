@@ -14,20 +14,19 @@
 | ... | ... |
 | Repeat until n files |  |
 
-- If the client has no key that exists on the server, the server will respond with a SYN byte (0x16), and close the connection.
-
-- When the server receives the header, the server will check to see if any duplicate files with the same hash exist. If all of the file(s) the client attempts to send already exist on the server, the server will respond with a NAK byte (0x15), and close the connection.
-
 - When at least one of the files the client wants to send is acceptable by the server, the servers responds with a transfer header that specifies the index of the file the client can send next (1 to n). The transfer header is in the following format:
 
-
-### Transfer Header
+### Server Response Header
 | Description | Payload Size (bytes) |
 |:------------|----:|
 | Index of file to transfer | 2 |
 | Pass/fail of last transfer | 1 |
 
-Note: The pass/fail byte will be empty for the first file requested by the server.
+Note: The pass/fail byte will be empty for the first file requested by the server. A pass will be encoded as 0x01, and fail will be encoded as 0x00.
+
+- If the client has no key that exists on the server, the server will respond with a file index of 0x16 (SYN) and close the connection.
+
+- If all of the file(s) the client attempts to send already exist on the server, the server will respond with a a file index of 0x15 (NAK), and close the connection.
 
 - The client then sends the encrypted contents of the file requested by the server.
 
