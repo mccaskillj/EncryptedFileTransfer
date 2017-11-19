@@ -20,7 +20,7 @@ data_head *header_parse(char *header)
 	int num_files;
 	char *read_loc = header;
 
-	num_files = ntohs(*read_loc);
+	num_files = ntohs(*((uint16_t *)read_loc));
 	read_loc += FILES_BYTES;
 
 	data_head *list = datalist_init(read_loc);
