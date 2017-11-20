@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,10 +10,12 @@
 static void header_add_node(data_head *list, char *file_data)
 {
 	char *name = file_data;
-	int size = ntohl(file_data[NAME_BYTES]);
-	char *hash = &file_data[NAME_BYTES + SIZE_BYTES];
 
-	datalist_append(list, name, size, hash);
+	uint32_t raw_enc_size;
+	memcpy(&raw_enc_size, file_data + NAME_BYTES, sizeof(uint32_t));
+
+	char *hash = file_data + NAME_BYTES + SIZE_BYTES;
+	datalist_append(list, name, ntohl(raw_enc_size), hash);
 }
 
 data_head *header_parse(char *header)
@@ -20,7 +23,9 @@ data_head *header_parse(char *header)
 	int num_files;
 	char *read_loc = header;
 
-	num_files = ntohs(*((uint16_t *)read_loc));
+	uint16_t files_raw;
+	memcpy(&files_raw, read_loc, sizeof(uint16_t));
+	num_files = ntohs(files_raw);
 	read_loc += FILES_BYTES;
 
 	data_head *list = datalist_init(read_loc);
@@ -30,8 +35,6 @@ data_head *header_parse(char *header)
 		header_add_node(list, read_loc);
 		read_loc += NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 	}
-
-	read_loc = NULL;
 
 	return list;
 }

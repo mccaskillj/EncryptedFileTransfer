@@ -18,6 +18,7 @@
 
 #include "common.h"
 #include "datalist.h"
+#include "filesys.h"
 #include "net.h"
 #include "parser.h"
 
@@ -39,16 +40,16 @@ static char *read_initial_header(int socketfd)
 	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
 	uint64_t files_info = HEADER_LINE_SIZE;
-	char *buf;
+	char *buf = NULL;
 
-	char initial_read[header_size + 1];
-	memset(initial_read, 0, header_size + 1);
+	char initial_read[header_size];
+	memset(initial_read, 0, header_size);
 
 	fprintf(stdout, "reading initial transfer header bytes\n");
 
-	while (header_size - total_read != 0) {
-		int n =
-		    recv(socketfd, initial_read, header_size - total_read, 0);
+	while (header_size - total_read > 0) {
+		int n = recv(socketfd, initial_read + total_read,
+			     header_size - total_read, 0);
 		if (n == -1) {
 			perror("recv");
 			exit(EXIT_FAILURE);
@@ -56,17 +57,21 @@ static char *read_initial_header(int socketfd)
 		total_read += n;
 	}
 
-	files_info = files_info * ntohs(*initial_read);
+	uint16_t raw_file_cnt;
+	memcpy(&raw_file_cnt, initial_read, sizeof(uint16_t));
+	files_info = files_info * ntohs(raw_file_cnt);
 
-	buf = calloc((header_size + files_info + 1), sizeof(char));
+	buf = calloc(header_size + files_info, 1);
 	if (buf == NULL)
 		mem_error();
 	memcpy(buf, initial_read, header_size);
 
 	total_read = 0;
-	while (files_info - total_read != 0) {
-		int n = recv(socketfd, &buf[total_read],
-			     files_info - total_read, 0);
+	uint32_t offset = header_size;
+
+	while (files_info - total_read > 0) {
+		int n =
+		    recv(socketfd, &buf[offset], files_info - total_read, 0);
 		if (n == -1) {
 			perror("recv");
 			exit(EXIT_FAILURE);
@@ -78,20 +83,39 @@ static char *read_initial_header(int socketfd)
 	return buf;
 }
 
-static uint8_t save_file(int socketfd, data_head **list, uint32_t *pos)
+static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 {
-	uint64_t read = 0;
 	uint64_t total_read = 0;
+
 	data_node *node = datalist_get_index(*list, *pos);
-	char *buf = malloc(sizeof(char) * node->size);
+	if (NULL == node) {
+		fprintf(stderr, "no file to save at idx %d\n", *pos);
+		exit(EXIT_FAILURE);
+	}
+
+	char *buf = malloc(node->size);
 	if (buf == NULL)
 		mem_error();
 
-	while (node->size - total_read != 0) {
-		read = recv(socketfd, &buf[total_read], node->size - total_read,
-			    0);
-		total_read += read;
+	while (node->size - total_read > 0) {
+		int n = recv(socketfd, buf + total_read,
+			     node->size - total_read, 0);
+		total_read += n;
 	}
+
+	struct sockaddr_storage sa_in;
+	socklen_t len = sizeof(sa_in);
+	if (getsockname(socketfd, (struct sockaddr *)&sa_in, &len) == -1)
+		perror("getsockname");
+
+	char *fname = addr_dirname(sa_in);
+
+	FILE *f = fopen(fname, "w");
+	if (NULL == f)
+		exit(EXIT_FAILURE);
+
+	fwrite(buf, node->size, 1, f);
+	fclose(f);
 
 	/*
 		decrypt the file and generate hash
@@ -105,35 +129,30 @@ static uint8_t save_file(int socketfd, data_head **list, uint32_t *pos)
 		save file to correct directory location
 	*/
 
-	return (uint8_t)1;
+	return TRANSFER_Y;
 }
 
-static void read_from_client(int socketfd, data_head **list, uint32_t *pos)
+static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 {
 	uint32_t sent_total = 0;
-	char *read_val;
+	char *read_val = NULL;
 	char return_string[RETURN_SIZE];
-	memset(return_string, 0, 3);
-	uint8_t status;
+	memset(return_string, 0, RETURN_SIZE);
+	uint8_t status = 0;
 
 	fprintf(stdout, "starting file transfer\n");
 
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
-		free(read_val);
-
-		*((uint16_t *)(return_string)) = htons(*pos);
-		return_string[RETURN_SIZE - 2] = 1;
 	} else {
 		status = save_file(socketfd, list, pos);
 		*pos = datalist_get_next_active(*list, *pos);
-
-		*((uint16_t *)(return_string)) = htons(*pos);
-		return_string[RETURN_SIZE - 2] = status;
 	}
 
-	fprintf(stdout, "requesting file %d\n", return_string[1]);
+	uint16_t client_sends = htons(*pos);
+	memcpy(return_string, &client_sends, sizeof(uint16_t));
+	return_string[RETURN_SIZE - 1] = status;
 
 	while (RETURN_SIZE - sent_total != 0) {
 		int n = send(socketfd, &return_string[sent_total],
@@ -150,7 +169,7 @@ static void accept_connection(int socketfd)
 {
 	pid_t pid;
 	data_head *list = NULL;
-	uint32_t pos = 0;
+	uint16_t pos = 1;
 
 	while (1) {
 		// Structs for storing the sender's address and port
@@ -177,12 +196,15 @@ static void accept_connection(int socketfd)
 		// Child process; sends a stream of bytes to the sender
 		if (pid == 0) {
 			close(socketfd);
+
 			while (list == NULL || pos <= list->size)
 				read_from_client(recvfd, &list, &pos);
+
+			datalist_destroy(list);
 			close(recvfd);
 			fprintf(stdout, "done reading files from client\n");
-			break;
 			// Parent process; loop back to accept more connections
+			break;
 		} else {
 			close(recvfd);
 			continue;

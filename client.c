@@ -68,7 +68,10 @@ static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
 
 	// Single - no need to parse
 	if (file_cnt == 1) {
-		paths[0] = strdup(file_paths);
+		paths[0] = calloc(NAME_BYTES, 1);
+		if (NULL == paths[0])
+			mem_error();
+		memcpy(paths[0], file_paths, strlen(file_paths));
 		return paths;
 	}
 
@@ -77,7 +80,11 @@ static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
 
 	char *path = strtok(file_paths, ",");
 	while (path != NULL) {
-		paths[n] = strdup(path);
+		paths[n] = calloc(NAME_BYTES, 1);
+		if (NULL == paths[n])
+			mem_error();
+		memcpy(paths[n], path, strlen(path));
+
 		n++;
 		path = strtok(NULL, ",");
 	}
@@ -298,7 +305,7 @@ static bool transfer_files(char *port, char *comma_files, char *key)
 	// We send any files the server requests
 	while (requested_idx > 0 && requested_idx <= num_files) {
 		int idx = requested_idx - 1; // 1 based in protocol
-		fprintf(stdout, "transfering %.*s...\n", NAME_BYTES,
+		fprintf(stdout, "transferring %.*s...\n", NAME_BYTES,
 			files[idx]);
 		bool ok = send_file(sfd, key, vector, files[idx]);
 		if (!ok) {
@@ -309,11 +316,13 @@ static bool transfer_files(char *port, char *comma_files, char *key)
 
 		int n = recv(sfd, resp_buf, RETURN_SIZE, 0);
 		if (n != RETURN_SIZE) {
-			fprintf(stderr, "bad transfer response\n");
+			fprintf(stderr, "bad transfer response: %d\n", n);
 			all_sent = false;
 			break;
 		}
 
+		fprintf(stdout, "transferring  %.*s done\n", NAME_BYTES,
+			files[idx]);
 		requested_idx = parse_next_file(resp_buf);
 	}
 

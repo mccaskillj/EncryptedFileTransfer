@@ -18,47 +18,45 @@
 
 data_head *datalist_init(char *vector)
 {
-	data_head *list = malloc(sizeof(data_node));
+	data_head *list = calloc(1, sizeof(data_node));
 	if (list == NULL)
 		mem_error();
 
-	list->vector = calloc(INIT_VEC_BYTES + 1, sizeof(char));
+	list->vector = calloc(INIT_VEC_BYTES, 1);
 	if (list->vector == NULL)
 		mem_error();
 
-	strncpy(list->vector, vector, INIT_VEC_BYTES);
+	memcpy(list->vector, vector, INIT_VEC_BYTES);
 	list->first = NULL;
 	list->last = NULL;
-	list->size = 0;
 	list->size = 0;
 
 	return list;
 }
 
-
 /*finish this function once file structure is established*/
-int check_hash(char *name, char *hash){
-	printf("Check file: %s\n", name);
-	printf("Check hash: %s\n", hash);
-
+int check_hash(char *name, char *hash)
+{
+	(void)name;
+	(void)hash;
 	return TRANSFER_Y;
 }
 
 static data_node *datalist_create_node(char *name, uint32_t size, char *hash)
 {
-	data_node *node = malloc(sizeof(data_node));
+	data_node *node = calloc(1, sizeof(data_node));
 	if (node == NULL)
 		mem_error();
 
-	node->name = malloc(sizeof(char) * NAME_BYTES + 1);
+	node->name = calloc(NAME_BYTES, 1);
 	if (node->name == NULL)
 		mem_error();
-	strncpy(node->name, name, NAME_BYTES);
+	memcpy(node->name, name, NAME_BYTES);
 
-	node->hash = malloc(sizeof(char) * HASH_BYTES + 1);
+	node->hash = calloc(HASH_BYTES, 1);
 	if (node->hash == NULL)
 		mem_error();
-	strncpy(node->hash, hash, HASH_BYTES);
+	memcpy(node->hash, hash, HASH_BYTES);
 
 	node->transfer = check_hash(name, hash);
 	node->next = NULL;
@@ -111,39 +109,44 @@ void datalist_remove(data_head *list, data_node *node)
 	node = NULL;
 }
 
-static char *datalist_copy_item(data_node *node, char *copy_location)
+static void datalist_copy_item(data_node *node, char *copy_location)
 {
-	strncpy(copy_location, node->name, NAME_BYTES);
+	memcpy(copy_location, node->name, NAME_BYTES);
 	copy_location += NAME_BYTES;
-	*((uint32_t *)(copy_location)) = (uint32_t)htons(node->size);
-	copy_location += SIZE_BYTES;
-	strncpy(copy_location, node->hash, HASH_BYTES);
-	copy_location += HASH_BYTES;
 
-	return copy_location;
+	uint32_t net_file_size = htonl(node->size);
+	memcpy(copy_location, &net_file_size, sizeof(uint32_t));
+
+	copy_location += SIZE_BYTES;
+	memcpy(copy_location, node->hash, HASH_BYTES);
 }
 
 char *datalist_generate_payload(data_head *list)
 {
 	char *payload;
 	char *copy_location;
-	data_node *pos;
+	data_node *pos = list->first;
 
 	int payload_size = HEADER_INIT_SIZE;
 	payload_size += list->size * HEADER_LINE_SIZE;
 
-	payload = calloc(payload_size + 1, sizeof(char));
+	payload = calloc(payload_size, 1);
 	if (payload == NULL)
 		mem_error();
 
 	copy_location = payload;
 
-	*((uint16_t *)(copy_location)) = (uint16_t)htons(list->size);
-	copy_location += FILES_BYTES;
-	strncpy(copy_location, list->vector, INIT_VEC_BYTES);
+	uint16_t tmp = htons(list->size);
+	memcpy(copy_location, &tmp, sizeof(uint16_t));
 
-	for (pos = list->first; pos != NULL; pos = pos->next) {
-		copy_location = datalist_copy_item(pos, copy_location);
+	copy_location += FILES_BYTES;
+	memcpy(copy_location, &list->vector, INIT_VEC_BYTES);
+	copy_location += INIT_VEC_BYTES;
+
+	while (pos != NULL) {
+		datalist_copy_item(pos, copy_location);
+		copy_location += NAME_BYTES + HASH_BYTES + SIZE_BYTES;
+		pos = pos->next;
 	}
 
 	return payload;
@@ -162,11 +165,12 @@ void datalist_destroy(data_head *list)
 
 data_node *datalist_get_index(data_head *list, uint32_t index)
 {
-	if (index >= list->size)
+	if (index > list->size)
 		return NULL;
 
 	data_node *node = list->first;
-	for (uint32_t i = 0; i < index; i++, node = node->next)
+
+	for (uint32_t i = 1; i < index; i++, node = node->next)
 		;
 
 	return node;
@@ -174,16 +178,15 @@ data_node *datalist_get_index(data_head *list, uint32_t index)
 
 uint32_t datalist_get_next_active(data_head *list, uint32_t index)
 {
-	data_node *pos = datalist_get_index(list, index);
-	uint32_t ind = index;
+	uint32_t next = index + 1;
+	data_node *pos = datalist_get_index(list, next);
+
 	if (pos == NULL)
 		return list->size + 1;
 
-	ind++;
-
-	pos = pos->next;
-	for (;pos != NULL && pos->transfer == TRANSFER_N; pos = pos->next, ind++)
+	for (; pos != NULL && pos->transfer == TRANSFER_N;
+	     pos = pos->next, next++)
 		;
 
-	return index;
+	return next;
 }
