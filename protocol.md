@@ -24,9 +24,9 @@
 
 Note: The pass/fail byte will be empty for the first file requested by the server. A pass will be encoded as 0x01, and fail will be encoded as 0x00.
 
-- If the client has no key that exists on the server, the server will respond with a file index of 0x16 (SYN) and close the connection.
+- If the client has no key that exists on the server, the server will respond with a file index and pass/fail of 0 and closes the connection.
 
-- If all of the file(s) the client attempts to send already exist on the server, the server will respond with a a file index of 0x15 (NAK), and close the connection.
+- If all of the file(s) the client attempts to send already exist on the server, the server will close the connection immediately.
 
 - The client then sends the encrypted contents of the file requested by the server.
 
