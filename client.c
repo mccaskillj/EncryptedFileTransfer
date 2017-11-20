@@ -22,6 +22,7 @@
 #include "filesys.h"
 #include "net.h"
 #include "parser.h"
+#include "ui.h"
 
 typedef struct {
 	uint8_t *key;
@@ -240,7 +241,7 @@ static int init_transfer(int serv, data_head *dh)
  * Encrypt and Write specified file to the server. Returns true if
  * the file is encrypted and written entirely, false otherwise.
  */
-static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
+static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 {
 	FILE *f = fopen(filepath, "r");
 	if (NULL == f)
@@ -264,6 +265,7 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 		g_error(err);
 
 		write_all(sfd, f_buf, CHUNK_SIZE);
+		prg_update(pb);
 
 		if (f_len < CHUNK_SIZE)
 			break;
@@ -336,11 +338,12 @@ void destroy_client(client *c)
  */
 static bool transfer_files(client *c)
 {
-	fprintf(stdout, "connecting to server\n");
+	fprintf(stdout, "Connecting to server...\n");
 	int sfd = client_socket(c->r_ip, c->r_port, c->l_ip, c->l_port);
+
 	uint32_t requested_idx = init_transfer(sfd, c->transferring);
 	if (requested_idx == 0) {
-		fprintf(stderr, "no AES key on server\n");
+		fprintf(stderr, "No AES key on server\n");
 		return false;
 	}
 
@@ -350,31 +353,33 @@ static bool transfer_files(client *c)
 		exit(EXIT_FAILURE);
 	}
 
-	fprintf(stdout, "got first file request for file %d\n", requested_idx);
+	fprintf(stdout, "Server initiated file transfer\n");
 
 	uint8_t resp_buf[RETURN_SIZE]; // Server response after file sent
 	bool all_sent = true; // Whether ALL files were sent successfully
 	gcry_cipher_hd_t hd = init_cipher_context(c->vector, c->key);
+	prg_bar *pb = init_prg_bar();
 
 	// We send any files the server requests
 	while (file != NULL) {
-		fprintf(stdout, "transferring %s...\n", file->name);
+		prg_reset(pb, file->size / CHUNK_SIZE, CHUNK_SIZE, file->name);
 
-		bool ok = send_file(sfd, hd, file->name);
+		bool ok = send_file(sfd, hd, file->name, pb);
 		if (!ok) {
-			fprintf(stderr, "writing file failed\n");
+			prg_error(pb, "sending file failed");
 			all_sent = false;
 			break;
 		}
 
 		int n = recv(sfd, resp_buf, RETURN_SIZE, 0);
 		if (n != RETURN_SIZE) {
-			fprintf(stderr, "bad transfer response: %d\n", n);
+			prg_error(pb, "bad transfer response from server");
 			all_sent = false;
 			break;
 		}
 
 		if (!transfer_passed(resp_buf)) {
+			prg_error(pb, "server indicated the transfer failed");
 			all_sent = false;
 			break;
 		}
@@ -383,6 +388,7 @@ static bool transfer_files(client *c)
 		file = datalist_get_index(c->transferring, requested_idx);
 	}
 
+	prg_destroy(pb);
 	gcry_cipher_close(hd);
 	return all_sent;
 }
@@ -438,7 +444,7 @@ int main(int argc, char *argv[])
 	bool ok = transfer_files(c);
 	if (!ok) {
 		status = EXIT_FAILURE;
-		fprintf(stderr, "transferring all files failed\n");
+		fprintf(stderr, "Transferring all files failed\n");
 	}
 
 	destroy_client(c);
