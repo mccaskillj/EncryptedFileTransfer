@@ -127,7 +127,7 @@ static void read_from_client(int socketfd, data_head **list, uint32_t *pos)
 		return_string[RETURN_SIZE - 2] = 1;
 	} else {
 		status = save_file(socketfd, list, pos);
-		*pos = *pos + 1;
+		*pos = datalist_get_next_active(*list, *pos);
 
 		*((uint16_t *)(return_string)) = htons(*pos);
 		return_string[RETURN_SIZE - 2] = status;
@@ -177,7 +177,8 @@ static void accept_connection(int socketfd)
 		// Child process; sends a stream of bytes to the sender
 		if (pid == 0) {
 			close(socketfd);
-			read_from_client(recvfd, &list, &pos);
+			while (list == NULL || pos <= list->size)
+				read_from_client(recvfd, &list, &pos);
 			close(recvfd);
 			fprintf(stdout, "done reading files from client\n");
 			break;

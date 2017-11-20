@@ -18,6 +18,7 @@ typedef struct data_node {
 	char *name;
 	uint32_t size;
 	char *hash;
+	int transfer;
 } data_node;
 
 typedef struct data_head {
@@ -38,5 +39,7 @@ void datalist_destroy(data_head *list);
 data_node *datalist_get_index(data_head *list, uint32_t index);
 
 char *datalist_generate_payload(data_head *list);
+
+uint32_t datalist_get_next_active(data_head *list, uint32_t index);
 
 #endif /*DATALIST_H*/

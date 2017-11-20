@@ -9,6 +9,7 @@
 
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,6 +35,15 @@ data_head *datalist_init(char *vector)
 	return list;
 }
 
+
+/*finish this function once file structure is established*/
+int check_hash(char *name, char *hash){
+	printf("Check file: %s\n", name);
+	printf("Check hash: %s\n", hash);
+
+	return TRANSFER_Y;
+}
+
 static data_node *datalist_create_node(char *name, uint32_t size, char *hash)
 {
 	data_node *node = malloc(sizeof(data_node));
@@ -50,6 +60,7 @@ static data_node *datalist_create_node(char *name, uint32_t size, char *hash)
 		mem_error();
 	strncpy(node->hash, hash, HASH_BYTES);
 
+	node->transfer = check_hash(name, hash);
 	node->next = NULL;
 	node->prev = NULL;
 	node->size = size;
@@ -159,4 +170,20 @@ data_node *datalist_get_index(data_head *list, uint32_t index)
 		;
 
 	return node;
+}
+
+uint32_t datalist_get_next_active(data_head *list, uint32_t index)
+{
+	data_node *pos = datalist_get_index(list, index);
+	uint32_t ind = index;
+	if (pos == NULL)
+		return list->size + 1;
+
+	ind++;
+
+	pos = pos->next;
+	for (;pos != NULL && pos->transfer == TRANSFER_N; pos = pos->next, ind++)
+		;
+
+	return index;
 }
