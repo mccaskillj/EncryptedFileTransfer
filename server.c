@@ -59,19 +59,16 @@ static char *read_initial_header(int socketfd)
 
 	uint16_t raw_file_cnt;
 	memcpy(&raw_file_cnt, initial_read, sizeof(uint16_t));
-	files_info = files_info * ntohs(raw_file_cnt);
+	files_info = files_info * ntohs(raw_file_cnt) + header_size;
 
 	buf = calloc(header_size + files_info, 1);
 	if (buf == NULL)
 		mem_error();
 	memcpy(buf, initial_read, header_size);
 
-	total_read = 0;
-	uint32_t offset = header_size;
-
 	while (files_info - total_read > 0) {
 		int n =
-		    recv(socketfd, &buf[offset], files_info - total_read, 0);
+		    recv(socketfd, buf + total_read, files_info - total_read, 0);
 		if (n == -1) {
 			perror("recv");
 			exit(EXIT_FAILURE);
@@ -88,6 +85,9 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	uint64_t total_read = 0;
 
 	data_node *node = datalist_get_index(*list, *pos);
+
+	fprintf(stderr, "receiving %s...\n", node->name);
+
 	if (NULL == node) {
 		fprintf(stderr, "no file to save at idx %d\n", *pos);
 		exit(EXIT_FAILURE);
@@ -129,6 +129,8 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 		save file to correct directory location
 	*/
 
+	fprintf(stderr, "receiving  %s done\n", node->name);
+
 	return TRANSFER_Y;
 }
 
@@ -140,7 +142,6 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 	memset(return_string, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
-	fprintf(stdout, "starting file transfer\n");
 
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
@@ -202,7 +203,7 @@ static void accept_connection(int socketfd)
 
 			datalist_destroy(list);
 			close(recvfd);
-			fprintf(stdout, "done reading files from client\n");
+			fprintf(stdout, "done reading files from client\n\n");
 			// Parent process; loop back to accept more connections
 			break;
 		} else {

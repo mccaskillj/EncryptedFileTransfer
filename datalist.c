@@ -128,7 +128,7 @@ char *datalist_generate_payload(data_head *list)
 	data_node *pos = list->first;
 
 	int payload_size = HEADER_INIT_SIZE;
-	payload_size += list->size * HEADER_LINE_SIZE;
+	payload_size += ((int)list->size * HEADER_LINE_SIZE);
 
 	payload = calloc(payload_size, 1);
 	if (payload == NULL)
