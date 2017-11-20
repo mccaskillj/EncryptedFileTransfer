@@ -214,8 +214,9 @@ static void encrypt_chunk(char *dst, char *src, int src_len, char *key,
 	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
 	g_error(err);
 
-	err = gcry_cipher_encrypt(hd, src, src_len, (unsigned char *)dst,
+	err = gcry_cipher_encrypt(hd, (unsigned char *)dst, src_len, src,
 				  src_len);
+
 	g_error(err);
 }
 
@@ -241,6 +242,10 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 		memset(enc_buf, 0, ENCRYPT_CHUNK_SIZE);
 
 		len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+
+		if (len % 16 != 0)
+			len += padding_aes(len);
+
 		encrypt_chunk(enc_buf, f_buf, len, key, vector);
 
 		int n = write_all(sfd, enc_buf, len);
