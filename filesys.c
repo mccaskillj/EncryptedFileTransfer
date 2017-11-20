@@ -18,7 +18,7 @@
 
 #include "common.h"
 
-static const char *IP_PORT_FORMAT = "%s:%s";
+static const char *IP_PORT_FORMAT = "%s:%hu";
 
 char *addr_dirname(struct sockaddr_storage s)
 {
@@ -33,7 +33,7 @@ char *addr_dirname(struct sockaddr_storage s)
 
 	switch (si->sa_family) {
 	case AF_INET:
-		ip = malloc(INET_ADDRSTRLEN);
+		ip = malloc(INET_ADDRSTRLEN + 1);
 		if (NULL == ip)
 			mem_error();
 
@@ -42,7 +42,7 @@ char *addr_dirname(struct sockaddr_storage s)
 		port = si4->sin_port;
 		break;
 	case AF_INET6:
-		ip = malloc(INET6_ADDRSTRLEN);
+		ip = malloc(INET6_ADDRSTRLEN + 1);
 		if (NULL == ip)
 			mem_error();
 
