@@ -67,8 +67,8 @@ static char *read_initial_header(int socketfd)
 	memcpy(buf, initial_read, header_size);
 
 	while (files_info - total_read > 0) {
-		int n =
-		    recv(socketfd, buf + total_read, files_info - total_read, 0);
+		int n = recv(socketfd, buf + total_read,
+			     files_info - total_read, 0);
 		if (n == -1) {
 			perror("recv");
 			exit(EXIT_FAILURE);
@@ -93,13 +93,17 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 		exit(EXIT_FAILURE);
 	}
 
-	char *buf = malloc(node->size);
+	uint32_t enc_size = node->size;
+	if (node->size % 16 != 0)
+		enc_size += padding_aes(node->size);
+
+	char *buf = malloc(enc_size);
 	if (buf == NULL)
 		mem_error();
 
-	while (node->size - total_read > 0) {
-		int n = recv(socketfd, buf + total_read,
-			     node->size - total_read, 0);
+	while (enc_size - total_read > 0) {
+		int n =
+		    recv(socketfd, buf + total_read, enc_size - total_read, 0);
 		total_read += n;
 	}
 
@@ -114,7 +118,7 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	if (NULL == f)
 		exit(EXIT_FAILURE);
 
-	fwrite(buf, node->size, 1, f);
+	fwrite(buf, enc_size, 1, f);
 	fclose(f);
 
 	/*
@@ -141,7 +145,6 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 	char return_string[RETURN_SIZE];
 	memset(return_string, 0, RETURN_SIZE);
 	uint8_t status = 0;
-
 
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
