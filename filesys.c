@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 
 #include "common.h"
+#include "filesys.h"
 
 static const char *IP_PORT_FORMAT = "%s:%hu";
 
@@ -100,14 +101,12 @@ bool ensure_dir(char *path)
 	struct stat st;
 
 	int err = stat(path, &st);
-	if (err == -1)
-		return false;
+	if (err != -1 && st.st_mode == S_IFDIR) {
+		return true; // Already exists
+	}
 
-	if (st.st_mode == S_IFDIR)
-		return true;
-
-	// Perms for user/group/other to read & write
-	err = mkdir(path, 0666);
+	// Perms for all to read & write
+	err = mkdir(path, 0755);
 	if (err == -1)
 		return false;
 

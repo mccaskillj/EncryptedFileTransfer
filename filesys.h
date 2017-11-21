@@ -9,6 +9,8 @@
 #ifndef FILESYS_H
 #define FILESYS_H
 
+#include<stdbool.h>
+
 #define DEFAULT_KEY_PATH ".key"
 
 /*
@@ -23,7 +25,7 @@ char *read_key(char *key_path);
  * it doesn't exist. Returns true on success (exists or created),
  * false otherwise
  */
-void ensure_dir(char *path);
+bool ensure_dir(char *path);
 
 /*
  * Returns the directory name for a given address in ip:port form.
