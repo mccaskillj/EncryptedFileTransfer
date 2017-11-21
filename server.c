@@ -67,8 +67,8 @@ static char *read_initial_header(int socketfd)
 	memcpy(buf, initial_read, header_size);
 
 	while (files_info - total_read > 0) {
-		int n =
-		    recv(socketfd, buf + total_read, files_info - total_read, 0);
+		int n = recv(socketfd, buf + total_read,
+			     files_info - total_read, 0);
 		if (n == -1) {
 			perror("recv");
 			exit(EXIT_FAILURE);
@@ -105,8 +105,8 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
-	if (getsockname(socketfd, (struct sockaddr *)&sa_in, &len) == -1)
-		perror("getsockname");
+	if (getpeername(socketfd, (struct sockaddr *)&sa_in, &len) == -1)
+		perror("getpeername");
 
 	char *fname = addr_dirname(sa_in);
 
@@ -142,7 +142,6 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 	memset(return_string, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
-
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
@@ -175,7 +174,8 @@ static void accept_connection(int socketfd)
 	while (1) {
 		// Structs for storing the sender's address and port
 		struct sockaddr_storage recv_addr;
-		socklen_t recv_size = 0;
+		memset(&recv_addr, 0, sizeof(recv_addr));
+		socklen_t recv_size = sizeof(recv_addr);
 
 		// Wait for a connection on the socket and then accept it
 		int recvfd =

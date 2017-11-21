@@ -51,4 +51,16 @@ void init_gcrypt();
  */
 int padding_aes(int raw_size);
 
+/*
+ * Parse the ip address from the given string with an optional ip and
+ * required port in the format ip:port
+ */
+char *parse_ip(char *ip_port);
+
+/*
+ * Parse the port from the given strign with an optional ip and
+ * required port in the format ip:port
+ */
+char *parse_port(char *ip_port);
+
 #endif
