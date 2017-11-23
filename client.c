@@ -159,8 +159,7 @@ static uint32_t *parse_sizes(char **to_transfer, uint16_t num_files)
 		mem_error();
 
 	for (int i = 0; i < num_files; i++) {
-		uint32_t size = filesize(to_transfer[i]);
-		sizes[i] = size + padding_aes(size);
+		sizes[i] = filesize(to_transfer[i]);
 	}
 
 	return sizes;
@@ -246,27 +245,35 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 	char enc_buf[ENCRYPT_CHUNK_SIZE];
 
 	// Read a chunk fo the file, encrypt, and write to server
-	int len;
+	int f_len, enc_len;
 	while (1) {
 		// TODO: optimize by memset'ing what we don't in the buffers
 		memset(f_buf, 0, ENCRYPT_CHUNK_SIZE);
 		memset(enc_buf, 0, ENCRYPT_CHUNK_SIZE);
 
-		len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+		f_len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+		enc_len = f_len;
 
-		if (len % 16 != 0)
-			len += padding_aes(len);
+		// Remaining bytes in file buf are set to random garbage
+		if (f_len % 16 != 0) {
+			int padding = padding_aes(f_len);
+			enc_len += padding;
 
-		encrypt_chunk(enc_buf, f_buf, len, key, vector);
+			for (int i = f_len - padding; i < f_len; i++) {
+				f_buf[i] = rand() % 255;
+			}
+		}
 
-		int n = write_all(sfd, enc_buf, len);
-		if (n < len) {
+		encrypt_chunk(enc_buf, f_buf, enc_len, key, vector);
+
+		int n = write_all(sfd, enc_buf, enc_len);
+		if (n < enc_len) {
 			fprintf(stderr, "failed to write encoded buffer\n");
 			fclose(f);
 			return false;
 		}
 
-		if (len < ENCRYPT_CHUNK_SIZE)
+		if (f_len < ENCRYPT_CHUNK_SIZE)
 			break;
 	}
 
