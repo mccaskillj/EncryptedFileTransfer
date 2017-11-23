@@ -6,11 +6,9 @@
  *  Purpose: Server (rxer) entry point.
  */
 
-#include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
 #include <netdb.h>
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,10 +21,6 @@
 #include "filesys.h"
 #include "net.h"
 #include "parser.h"
-
-int termination = 1;
-
-static void handle() { termination = 2; }
 
 static void usage(char *bin_path, int exit_status)
 {
@@ -180,9 +174,8 @@ static void accept_connection(int socketfd)
 	pid_t pid;
 	data_head *list = NULL;
 	uint16_t pos = 1;
-	signal(SIGINT, handle);
 
-	while (termination == 1) {
+	while (1) {
 		// Structs for storing the sender's address and port
 		struct sockaddr_storage recv_addr;
 		memset(&recv_addr, 0, sizeof(recv_addr));
@@ -192,10 +185,6 @@ static void accept_connection(int socketfd)
 		int recvfd =
 		    accept(socketfd, (struct sockaddr *)&recv_addr, &recv_size);
 		if (recvfd == -1) {
-			if (errno == EINTR) {
-				close(socketfd);
-				exit(EXIT_SUCCESS);
-			}
 			perror("accept");
 			continue;
 		}
