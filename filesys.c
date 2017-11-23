@@ -29,8 +29,8 @@ char *addr_dirname(struct sockaddr_storage s)
 	uint16_t port = 0;
 
 	struct sockaddr *si = (struct sockaddr *)&s;
-	struct sockaddr_in *si4 = (struct sockaddr_in *)&si;
-	struct sockaddr_in6 *si6 = (struct sockaddr_in6 *)&si;
+	struct sockaddr_in *si4 = (struct sockaddr_in *)si;
+	struct sockaddr_in6 *si6 = (struct sockaddr_in6 *)si;
 
 	switch (si->sa_family) {
 	case AF_INET:
@@ -40,7 +40,7 @@ char *addr_dirname(struct sockaddr_storage s)
 
 		inet_ntop(AF_INET, &(si4->sin_addr), ip, INET_ADDRSTRLEN);
 		ip[INET_ADDRSTRLEN] = '\0';
-		port = si4->sin_port;
+		port = ntohs(si4->sin_port);
 		break;
 	case AF_INET6:
 		ip = malloc(INET6_ADDRSTRLEN + 1);
@@ -49,7 +49,7 @@ char *addr_dirname(struct sockaddr_storage s)
 
 		inet_ntop(AF_INET6, &(si6->sin6_addr), ip, INET6_ADDRSTRLEN);
 		ip[INET6_ADDRSTRLEN] = '\0';
-		port = si6->sin6_port;
+		port = ntohs(si6->sin6_port);
 		break;
 	default:
 		return NULL;

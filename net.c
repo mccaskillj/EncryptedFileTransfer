@@ -6,6 +6,7 @@
  *  Purpose: Networking related functions
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -95,48 +96,57 @@ int server_socket(char *port)
 	return socketfd;
 }
 
-int client_socket(char *port)
+int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 {
-	struct addrinfo hints, *results, *p;
-	int socketfd = 0, rv;
+	int rv = 0;
+	struct sockaddr_in raddr, laddr;
+	memset(&raddr, 0, sizeof(raddr));
+	memset(&laddr, 0, sizeof(laddr));
 
-	// Initialize hints and set the options for a TCP connection
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
+	raddr.sin_family = AF_INET;
+	raddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	raddr.sin_port = htons(atoi(svr_port));
 
-	// Get avaliable address, ports
-	rv = getaddrinfo(NULL, port, &hints, &results);
-	if (rv == -1) {
-		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
+	laddr.sin_family = AF_INET;
+	laddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	if (NULL == loc_port)
+		laddr.sin_port = htons(0); // OS assigned
+	else
+		laddr.sin_port = htons(atoi(loc_port));
+
+	// Connect to specified server IPs
+	if (NULL != svr_ip) {
+		raddr.sin_addr.s_addr = inet_addr(svr_ip);
+	}
+
+	// Bind to specified local IPs
+	if (NULL != loc_ip) {
+		laddr.sin_addr.s_addr = inet_addr(loc_ip);
+	}
+
+	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (socketfd == -1) {
+		perror("socket");
 		exit(EXIT_FAILURE);
 	}
 
-	// Loop through all the results and connect to the first we can
-	for (p = results; p != NULL; p = p->ai_next) {
-		socketfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-		if (socketfd == -1) {
-			perror("client socket error");
-			continue;
-		}
-
-		rv = connect(socketfd, p->ai_addr, p->ai_addrlen);
+	if (NULL != loc_port) {
+		rv = bind(socketfd, (struct sockaddr *)&laddr, sizeof(laddr));
 		if (rv == -1) {
+			perror("bind");
 			close(socketfd);
-			perror("client connect errror");
-			continue;
+			exit(EXIT_FAILURE);
 		}
-
-		// Connection was established
-		break;
 	}
 
-	if (p == NULL) {
-		fprintf(stderr, "failed to connect\n");
+	rv = connect(socketfd, (struct sockaddr *)&raddr,
+		     sizeof(struct sockaddr));
+	if (rv == -1) {
+		close(socketfd);
+		perror("connect");
 		exit(EXIT_FAILURE);
 	}
 
-	freeaddrinfo(results);
 	return socketfd;
 }
