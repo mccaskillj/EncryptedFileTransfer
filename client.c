@@ -22,22 +22,23 @@
 #include "net.h"
 #include "parser.h"
 
-#define HASH_CHUNK_SIZE 2 << 14    // 2^14 for better large file performance
-#define ENCRYPT_CHUNK_SIZE 2 << 10 // ~1.5x MTU
-
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
 
-	fprintf(stderr,
-		"Usage: %s -f files [-k key][-p port][-h]\n\n"
-		"Options:\n"
-		"-f Comma separated path(s) to file(s) to transfer (eg: "
-		"file1,file2)\n"
-		"-k Path to 256 bit AES encryption key (default %s)\n"
-		"-p Port to connect to server (default %s)\n"
-		"-h Help\n\n",
-		bin, DEFAULT_KEY_PATH, DEFAULT_SERVER_PORT);
+	fprintf(
+	    stderr,
+	    "Usage: %s -f files [-l [ip]:port] [-r [ip]:port] [-k key] [-h]\n\n"
+	    "Options:\n"
+	    "-f Comma separated path(s) to file(s) to transfer (eg: "
+	    "file1,file2)\n"
+	    "-r Remote address ip:port (default ip is localhost, default port "
+	    "is %s)\n"
+	    "-l Local address ip:port (default ip is localhost, default port "
+	    "is random)\n"
+	    "-k Path to 256 bit AES encryption key (default %s)\n"
+	    "-h Help\n\n",
+	    bin, DEFAULT_SERVER_PORT, DEFAULT_KEY_PATH);
 	exit(exit_status);
 }
 
@@ -155,8 +156,7 @@ static uint32_t *parse_sizes(char **to_transfer, uint16_t num_files)
 		mem_error();
 
 	for (int i = 0; i < num_files; i++) {
-		uint32_t size = filesize(to_transfer[i]);
-		sizes[i] = size + padding_aes(size);
+		sizes[i] = filesize(to_transfer[i]);
 	}
 
 	return sizes;
@@ -238,31 +238,39 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 		return false;
 
 	// We will re-use the buffers for efficiency
-	char f_buf[ENCRYPT_CHUNK_SIZE];
-	char enc_buf[ENCRYPT_CHUNK_SIZE];
+	char f_buf[CHUNK_SIZE];
+	char enc_buf[CHUNK_SIZE];
 
 	// Read a chunk fo the file, encrypt, and write to server
-	int len;
+	int f_len, enc_len;
 	while (1) {
 		// TODO: optimize by memset'ing what we don't in the buffers
-		memset(f_buf, 0, ENCRYPT_CHUNK_SIZE);
-		memset(enc_buf, 0, ENCRYPT_CHUNK_SIZE);
+		memset(f_buf, 0, CHUNK_SIZE);
+		memset(enc_buf, 0, CHUNK_SIZE);
 
-		len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+		f_len = fread(f_buf, 1, CHUNK_SIZE, f);
+		enc_len = f_len;
 
-		if (len % 16 != 0)
-			len += padding_aes(len);
+		// Remaining bytes in file buf are set to random garbage
+		if (f_len % 16 != 0) {
+			int padding = padding_aes(f_len);
+			enc_len += padding;
 
-		encrypt_chunk(enc_buf, f_buf, len, key, vector);
+			for (int i = f_len; i < enc_len; i++) {
+				f_buf[i] = rand() % 255;
+			}
+		}
 
-		int n = write_all(sfd, enc_buf, len);
-		if (n < len) {
+		encrypt_chunk(enc_buf, f_buf, enc_len, key, vector);
+
+		int n = write_all(sfd, enc_buf, enc_len);
+		if (n < enc_len) {
 			fprintf(stderr, "failed to write encoded buffer\n");
 			fclose(f);
 			return false;
 		}
 
-		if (len < ENCRYPT_CHUNK_SIZE)
+		if (f_len < CHUNK_SIZE)
 			break;
 	}
 
@@ -271,11 +279,13 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 }
 
 /*
- * Transfer comma separated files to the server at the specified address
- * with the given AES key. Returns true on successful transfer of all
- * non-duplicate files, false otherwise.
+ * Transfer comma separated files from the specified local port to the
+ * server at the specified destination port with the given AES key.
+ * Returns true on successful transfer of all non-duplicate files,
+ * false otherwise.
  */
-static bool transfer_files(char *port, char *comma_files, char *key)
+static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
+			   char *loc_port, char *comma_files, char *key)
 {
 	// Prep for transfer
 	uint16_t num_files = parse_file_cnt(comma_files);
@@ -295,7 +305,7 @@ static bool transfer_files(char *port, char *comma_files, char *key)
 	}
 
 	fprintf(stdout, "connecting to server\n");
-	int sfd = client_socket(port);
+	int sfd = client_socket(svr_ip, svr_port, loc_ip, loc_port);
 	uint32_t requested_idx = init_transfer(sfd, dh);
 	fprintf(stdout, "got first file request for file %d\n", requested_idx);
 
@@ -343,12 +353,19 @@ static bool transfer_files(char *port, char *comma_files, char *key)
 int main(int argc, char *argv[])
 {
 	int opt = 0;
-	char *port = NULL, *key_path = NULL, *file_paths = NULL;
+	char *l_port = NULL, *l_ip = NULL;
+	char *r_port = NULL, *r_ip = NULL;
+	char *key_path = NULL, *file_paths = NULL;
 
-	while ((opt = getopt(argc, argv, "p:k:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:k:f:h")) != -1) {
 		switch (opt) {
-		case 'p':
-			port = strdup(optarg);
+		case 'r':
+			r_ip = parse_ip(optarg);
+			r_port = parse_port(optarg);
+			break;
+		case 'l':
+			l_ip = parse_ip(optarg);
+			l_port = parse_port(optarg);
 			break;
 		case 'k':
 			key_path = strdup(optarg);
@@ -373,8 +390,8 @@ int main(int argc, char *argv[])
 	if (NULL == key_path)
 		key_path = strdup(DEFAULT_KEY_PATH);
 
-	if (NULL == port)
-		port = strdup(DEFAULT_SERVER_PORT);
+	if (NULL == r_port)
+		r_port = strdup(DEFAULT_SERVER_PORT);
 
 	char *key = read_key(key_path);
 	if (NULL == key) {
@@ -383,14 +400,22 @@ int main(int argc, char *argv[])
 	}
 
 	int status = EXIT_SUCCESS;
-
-	bool ok = transfer_files(port, file_paths, key);
+	bool ok = transfer_files(r_ip, r_port, l_ip, l_port, file_paths, key);
 	if (!ok) {
 		status = EXIT_FAILURE;
 		fprintf(stderr, "transferring files failed\n");
 	}
 
-	free(port);
+	if (l_port != NULL)
+		free(l_port);
+
+	if (l_ip != NULL)
+		free(l_ip);
+
+	if (r_ip != NULL)
+		free(r_ip);
+
+	free(r_port);
 	free(key_path);
 	free(key);
 	free(file_paths);

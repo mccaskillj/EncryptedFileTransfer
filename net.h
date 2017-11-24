@@ -14,11 +14,14 @@
  */
 int write_all(int dst, char *src, int src_len);
 
+int recv_all(int socketfd, char *buf, int size);
+
 /*
  * Open a TCP socket that is connected to the specified
- * port
+ * destination ip:port. Will bind to the provided local ip:port
+ * if not NULL.
  */
-int client_socket(char *port);
+int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port);
 
 /*
  * Open a TCP socket that is ready to accept incoming

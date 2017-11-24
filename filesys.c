@@ -15,8 +15,10 @@
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #include "common.h"
+#include "filesys.h"
 
 static const char *IP_PORT_FORMAT = "%s:%hu";
 
@@ -28,8 +30,8 @@ char *addr_dirname(struct sockaddr_storage s)
 	uint16_t port = 0;
 
 	struct sockaddr *si = (struct sockaddr *)&s;
-	struct sockaddr_in *si4 = (struct sockaddr_in *)&si;
-	struct sockaddr_in6 *si6 = (struct sockaddr_in6 *)&si;
+	struct sockaddr_in *si4 = (struct sockaddr_in *)si;
+	struct sockaddr_in6 *si6 = (struct sockaddr_in6 *)si;
 
 	switch (si->sa_family) {
 	case AF_INET:
@@ -39,7 +41,7 @@ char *addr_dirname(struct sockaddr_storage s)
 
 		inet_ntop(AF_INET, &(si4->sin_addr), ip, INET_ADDRSTRLEN);
 		ip[INET_ADDRSTRLEN] = '\0';
-		port = si4->sin_port;
+		port = ntohs(si4->sin_port);
 		break;
 	case AF_INET6:
 		ip = malloc(INET6_ADDRSTRLEN + 1);
@@ -48,7 +50,7 @@ char *addr_dirname(struct sockaddr_storage s)
 
 		inet_ntop(AF_INET6, &(si6->sin6_addr), ip, INET6_ADDRSTRLEN);
 		ip[INET6_ADDRSTRLEN] = '\0';
-		port = si6->sin6_port;
+		port = ntohs(si6->sin6_port);
 		break;
 	default:
 		return NULL;
@@ -100,14 +102,13 @@ bool ensure_dir(char *path)
 	struct stat st;
 
 	int err = stat(path, &st);
-	if (err == -1)
-		return false;
 
-	if (st.st_mode == S_IFDIR)
-		return true;
+	if (err != -1 && st.st_mode == S_IFDIR) {
+		return true; // Already exists
+	}
 
-	// Perms for user/group/other to read & write
-	err = mkdir(path, 0666);
+	// Perms for all to read & write
+	err = mkdir(path, 0755);
 	if (err == -1)
 		return false;
 
@@ -123,4 +124,17 @@ uint32_t filesize(char *path)
 		return 0;
 
 	return st.st_size;
+}
+
+char *gen_path(char *dirpath, char *filename)
+{
+	// PATH_MAX because I don't want to use strlen on filename just incase
+	// it doesn't have a null terminator.
+	char *path = malloc(PATH_MAX);
+
+	if (path == NULL)
+		mem_error();
+
+	snprintf(path, PATH_MAX, "%s/%s", dirpath, filename);
+	return path;
 }
