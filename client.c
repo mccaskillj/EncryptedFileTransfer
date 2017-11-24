@@ -205,25 +205,12 @@ static int init_transfer(int serv, data_head *dh)
  * Encrypt a chunk of data of size src_len from src into dst with the
  * provided key
  */
-static void encrypt_chunk(char *dst, char *src, int src_len, char *key,
-			  char *vector)
+static void encrypt_chunk(gcry_cipher_hd_t hd, char *dst, char *src,
+			  int src_len)
 {
-	gcry_cipher_hd_t hd;
 	gcry_error_t err = 0;
-
-	err =
-	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
-	g_error(err);
-
-	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
-	g_error(err);
-
-	err = gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
-	g_error(err);
-
 	err = gcry_cipher_encrypt(hd, (unsigned char *)dst, src_len, src,
 				  src_len);
-
 	g_error(err);
 }
 
@@ -231,7 +218,7 @@ static void encrypt_chunk(char *dst, char *src, int src_len, char *key,
  * Encrypt and Write specified file to the server. Returns true if
  * the file is encrypted and written entirely, false otherwise.
  */
-static bool send_file(int sfd, char *key, char *vector, char *filepath)
+static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 {
 	FILE *f = fopen(filepath, "r");
 	if (NULL == f)
@@ -241,12 +228,8 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 	char f_buf[CHUNK_SIZE];
 	char enc_buf[CHUNK_SIZE];
 
-	// Read a chunk fo the file, encrypt, and write to server
+	// Read a chunk from the file, encrypt, and write to server
 	while (1) {
-		// TODO: optimize by memset'ing what we don't in the buffers
-		memset(f_buf, 0, CHUNK_SIZE);
-		memset(enc_buf, 0, CHUNK_SIZE);
-
 		int f_len = fread(f_buf, 1, CHUNK_SIZE, f);
 
 		// Remaining bytes in file buf are set to random garbage
@@ -256,7 +239,7 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 			}
 		}
 
-		encrypt_chunk(enc_buf, f_buf, CHUNK_SIZE, key, vector);
+		encrypt_chunk(hd, enc_buf, f_buf, CHUNK_SIZE);
 
 		int n = write_all(sfd, enc_buf, CHUNK_SIZE);
 		if (n < CHUNK_SIZE) {
@@ -306,13 +289,14 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 
 	char resp_buf[RETURN_SIZE]; // Server response after file sent
 	bool all_sent = true;
+	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
 
 	// We send any files the server requests
 	while (requested_idx > 0 && requested_idx <= num_files) {
 		int idx = requested_idx - 1; // 1 based in protocol
 		fprintf(stdout, "transferring %.*s...\n", NAME_BYTES,
 			files[idx]);
-		bool ok = send_file(sfd, key, vector, files[idx]);
+		bool ok = send_file(sfd, hd, files[idx]);
 		if (!ok) {
 			fprintf(stderr, "writing file failed\n");
 			all_sent = false;
@@ -332,6 +316,8 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 	}
 
 	// Cleanup
+	gcry_cipher_close(hd);
+
 	for (int i = 0; i < num_files; i++) {
 		free(files[i]);
 		free(hashes[i]);
