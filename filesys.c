@@ -9,13 +9,13 @@
 #define _XOPEN_SOURCE // enable sys/stat macros
 
 #include <arpa/inet.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <limits.h>
 
 #include "common.h"
 #include "filesys.h"
@@ -128,10 +128,7 @@ uint32_t filesize(char *path)
 
 char *gen_path(char *dirpath, char *filename)
 {
-	// PATH_MAX because I don't want to use strlen on filename just incase
-	// it doesn't have a null terminator.
 	char *path = malloc(PATH_MAX);
-
 	if (path == NULL)
 		mem_error();
 

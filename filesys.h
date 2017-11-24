@@ -45,8 +45,7 @@ char *addr_dirname(struct sockaddr_storage s);
 uint32_t filesize(char *path);
 
 /*
- * Attaches the file name to the director's path so create the full path of the
- * file.anmedirname to the file name
+ * Generate absolute path from a given directory path and a filename
  */
 char *gen_path(char *dirpath, char *filename);
 

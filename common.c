@@ -47,6 +47,24 @@ void init_gcrypt()
 	gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 }
 
+gcry_cipher_hd_t init_cipher_context(char *vector, char *key)
+{
+	gcry_cipher_hd_t hd;
+	gcry_error_t err = 0;
+
+	err =
+	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
+	g_error(err);
+
+	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
+	g_error(err);
+
+	gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
+	g_error(err);
+
+	return hd;
+}
+
 char *parse_ip(char *ip_port)
 {
 	int host_len = 0;
