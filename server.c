@@ -83,27 +83,6 @@ static char *read_initial_header(int socketfd)
 }
 
 /*
- * Returns a gcry_cipher_hd_t with the vector and the key set to it.
- */
-static gcry_cipher_hd_t decrypt_init(char *vector, char *key)
-{
-	gcry_cipher_hd_t hd;
-	gcry_error_t err = 0;
-
-	err =
-	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
-	g_error(err);
-
-	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
-	g_error(err);
-
-	gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
-	g_error(err);
-
-	return hd;
-}
-
-/*
  * Decrypt a chunk of data from src into dst
  */
 static void decrypt_data(gcry_cipher_hd_t hd, char *src, char *dst)
@@ -159,24 +138,24 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 
 	FILE *fp = fopen(filepath, "w");
 	if (fp == NULL) {
-		perror("fopen error");
+		perror("fopen");
 		exit(EXIT_FAILURE);
 	}
 
-	gcry_cipher_hd_t gcry_handle = decrypt_init(vector, key);
-	char out[CHUNK_SIZE];
-	char buf[CHUNK_SIZE];
+	gcry_cipher_hd_t h = init_cipher_context(vector, key);
+	char rx_buf[CHUNK_SIZE];
+	char f_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
 
 	while (total_read < node->size) {
-		int n = recv_all(socketfd, buf, CHUNK_SIZE);
+		int n = recv_all(socketfd, rx_buf, CHUNK_SIZE);
 		if (n < CHUNK_SIZE) {
 			fprintf(stderr, "receiving full chunk failed\n");
 			exit(EXIT_FAILURE);
 		}
 
-		decrypt_data(gcry_handle, buf, out);
-		fwrite(out, 1, CHUNK_SIZE, fp);
+		decrypt_data(h, rx_buf, f_buf);
+		fwrite(f_buf, 1, CHUNK_SIZE, fp);
 		total_read += n;
 	}
 
@@ -184,7 +163,7 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	free(key);
 	free(clientaddr);
 	fclose(fp);
-	gcry_cipher_close(gcry_handle);
+	gcry_cipher_close(h);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;

@@ -20,10 +20,10 @@
 
 int write_all(int fd, char *src, int src_len)
 {
-	int written = 0, n = 0;
+	int written = 0;
 
 	while (written < src_len) {
-		n = write(fd, src + written, src_len - written);
+		int n = write(fd, src + written, src_len - written);
 		if (n < 0) {
 			if (errno == EINTR)
 				break;
@@ -36,14 +36,12 @@ int write_all(int fd, char *src, int src_len)
 	return written;
 }
 
-int recv_all(int socketfd, char *buf, int size)
+int recv_all(int fd, char *dst, int dst_len)
 {
-	int total_read = 0, n = 0;
+	int total_read = 0;
 
-	while (total_read < size) {
-		n = recv(socketfd, buf + total_read, CHUNK_SIZE - total_read,
-			 0);
-
+	while (total_read < dst_len) {
+		int n = recv(fd, dst + total_read, dst_len - total_read, 0);
 		if (n == -1) {
 			perror("recv failed");
 			exit(EXIT_FAILURE);
@@ -51,6 +49,7 @@ int recv_all(int socketfd, char *buf, int size)
 
 		total_read += n;
 	}
+
 	return total_read;
 }
 

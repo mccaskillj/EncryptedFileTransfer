@@ -49,6 +49,12 @@ void mem_error(void);
 void init_gcrypt();
 
 /*
+ * Initialize an AES-256 cipher context with the given initialization
+ * vector and key
+ */
+gcry_cipher_hd_t init_cipher_context(char *vector, char *key);
+
+/*
  * Return the number of padding bytes needed for a raw size to fit
  * into the AES block size
  */
