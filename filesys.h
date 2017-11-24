@@ -9,9 +9,14 @@
 #ifndef FILESYS_H
 #define FILESYS_H
 
-#include<stdbool.h>
+#include <stdbool.h>
 
 #define DEFAULT_KEY_PATH ".key"
+#define KEYS_DIR "keys"
+#define KEYS_DIR_LEN 4
+#define RECV_DIR "received"
+#define HASHS_DIR "hashes"
+#define FILES_DIR "files"
 
 /*
  * Read a 256 bit key from a file at the specified path. Returns a key
@@ -38,5 +43,11 @@ char *addr_dirname(struct sockaddr_storage s);
  * 0 if the path isn't a valid file
  */
 uint32_t filesize(char *path);
+
+/*
+ * Attaches the file name to the director's path so create the full path of the
+ * file.anmedirname to the file name
+ */
+char *gen_path(char *dirpath, char *filename);
 
 #endif

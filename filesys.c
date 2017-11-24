@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #include "common.h"
 #include "filesys.h"
@@ -101,6 +102,7 @@ bool ensure_dir(char *path)
 	struct stat st;
 
 	int err = stat(path, &st);
+
 	if (err != -1 && st.st_mode == S_IFDIR) {
 		return true; // Already exists
 	}
@@ -122,4 +124,17 @@ uint32_t filesize(char *path)
 		return 0;
 
 	return st.st_size;
+}
+
+char *gen_path(char *dirpath, char *filename)
+{
+	// PATH_MAX because I don't want to use strlen on filename just incase
+	// it doesn't have a null terminator.
+	char *path = malloc(PATH_MAX);
+
+	if (path == NULL)
+		mem_error();
+
+	snprintf(path, PATH_MAX, "%s/%s", dirpath, filename);
+	return path;
 }

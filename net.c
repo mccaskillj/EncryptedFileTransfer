@@ -36,6 +36,25 @@ int write_all(int fd, char *src, int src_len)
 	return written;
 }
 
+// This code is very similar to the one above. Refactor this
+int recv_all(int socketfd, char *buf, int size)
+{
+	int total_read = 0, n = 0;
+
+	while (total_read < size) {
+		n = recv(socketfd, buf + total_read, (CHUNK_SIZE)-total_read,
+			 0);
+
+		if (n == -1) {
+			perror("recv failed");
+			exit(EXIT_FAILURE);
+		}
+
+		total_read += n;
+	}
+	return total_read;
+}
+
 int server_socket(char *port)
 {
 	int socketfd, rv;

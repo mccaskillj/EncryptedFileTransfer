@@ -140,7 +140,7 @@ char *datalist_generate_payload(data_head *list)
 	memcpy(copy_location, &tmp, sizeof(uint16_t));
 
 	copy_location += FILES_BYTES;
-	memcpy(copy_location, &list->vector, INIT_VEC_BYTES);
+	memcpy(copy_location, list->vector, INIT_VEC_BYTES);
 	copy_location += INIT_VEC_BYTES;
 
 	while (pos != NULL) {

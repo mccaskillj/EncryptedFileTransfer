@@ -22,9 +22,6 @@
 #include "net.h"
 #include "parser.h"
 
-#define HASH_CHUNK_SIZE 2 << 14    // 2^14 for better large file performance
-#define ENCRYPT_CHUNK_SIZE 2 << 10 // ~1.5x MTU
-
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -241,17 +238,17 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 		return false;
 
 	// We will re-use the buffers for efficiency
-	char f_buf[ENCRYPT_CHUNK_SIZE];
-	char enc_buf[ENCRYPT_CHUNK_SIZE];
+	char f_buf[CHUNK_SIZE];
+	char enc_buf[CHUNK_SIZE];
 
 	// Read a chunk fo the file, encrypt, and write to server
 	int f_len, enc_len;
 	while (1) {
 		// TODO: optimize by memset'ing what we don't in the buffers
-		memset(f_buf, 0, ENCRYPT_CHUNK_SIZE);
-		memset(enc_buf, 0, ENCRYPT_CHUNK_SIZE);
+		memset(f_buf, 0, CHUNK_SIZE);
+		memset(enc_buf, 0, CHUNK_SIZE);
 
-		f_len = fread(f_buf, 1, ENCRYPT_CHUNK_SIZE, f);
+		f_len = fread(f_buf, 1, CHUNK_SIZE, f);
 		enc_len = f_len;
 
 		// Remaining bytes in file buf are set to random garbage
@@ -259,7 +256,7 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 			int padding = padding_aes(f_len);
 			enc_len += padding;
 
-			for (int i = f_len - padding; i < f_len; i++) {
+			for (int i = f_len; i < enc_len; i++) {
 				f_buf[i] = rand() % 255;
 			}
 		}
@@ -273,7 +270,7 @@ static bool send_file(int sfd, char *key, char *vector, char *filepath)
 			return false;
 		}
 
-		if (f_len < ENCRYPT_CHUNK_SIZE)
+		if (f_len < CHUNK_SIZE)
 			break;
 	}
 

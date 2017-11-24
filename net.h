@@ -14,6 +14,8 @@
  */
 int write_all(int dst, char *src, int src_len);
 
+int recv_all(int socketfd, char *buf, int size);
+
 /*
  * Open a TCP socket that is connected to the specified
  * destination ip:port. Will bind to the provided local ip:port

@@ -9,11 +9,13 @@
 #include <getopt.h>
 #include <libgen.h>
 #include <netdb.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -80,6 +82,83 @@ static char *read_initial_header(int socketfd)
 	return buf;
 }
 
+/*
+ * Returns a gcry_cipher_hd_t with the vector and the key set to it.
+ */
+static gcry_cipher_hd_t decrypt_init(char *vector, char *key)
+{
+	gcry_cipher_hd_t hd;
+	gcry_error_t err = 0;
+
+	err =
+	    gcry_cipher_open(&hd, GCRY_CIPHER_AES256, GCRY_CIPHER_MODE_CBC, 0);
+	g_error(err);
+
+	err = gcry_cipher_setkey(hd, key, KEY_SIZE);
+	g_error(err);
+
+	gcry_cipher_setiv(hd, vector, INIT_VEC_BYTES);
+	g_error(err);
+
+	return hd;
+}
+
+/*
+ * Decrypt the data and write it to the a file.
+ */
+static void decrypt_data(gcry_cipher_hd_t hd, char *encry_data, char *out,
+			 FILE *outfp, int size)
+{
+	gcry_error_t err = 0;
+
+	err = gcry_cipher_decrypt(hd, out, CHUNK_SIZE, encry_data, CHUNK_SIZE);
+	g_error(err);
+
+	fwrite(out, 1, size, outfp);
+}
+
+/*
+ * Creates a directory for the client and all the sub directories that the
+ * client's directory needs
+ */
+static char *gen_client_dirs(char *clientdir)
+{
+	char *client_path = gen_path(RECV_DIR, clientdir);
+	char *hash_path = gen_path(client_path, HASHS_DIR);
+	char *files_path = gen_path(client_path, FILES_DIR);
+
+	ensure_dir(client_path);
+	free(client_path);
+
+	ensure_dir(hash_path);
+	free(hash_path);
+
+	ensure_dir(files_path);
+	return files_path;
+}
+
+/*
+ * Open the file for appending. If the file exists then delete it and then open
+ * it.
+ */
+static FILE *fp_init(char *filepath)
+{
+	if (access(filepath, F_OK) == 0) {
+		if ((unlink(filepath)) == -1)
+			perror("unlink error");
+	}
+
+	FILE *fp;
+
+	fp = fopen(filepath, "a");
+	if (fp == NULL) {
+		perror("fopen error");
+		exit(EXIT_FAILURE);
+	}
+
+	return fp;
+}
+
 static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 {
 	uint64_t total_read = 0;
@@ -93,33 +172,39 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 		exit(EXIT_FAILURE);
 	}
 
-	uint32_t enc_size = node->size;
-	if (node->size % 16 != 0)
-		enc_size += padding_aes(node->size);
-
-	char *buf = malloc(enc_size);
-	if (buf == NULL)
-		mem_error();
-
-	while (enc_size - total_read > 0) {
-		int n =
-		    recv(socketfd, buf + total_read, enc_size - total_read, 0);
-		total_read += n;
-	}
+	char buf[CHUNK_SIZE];
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
+
 	if (getpeername(socketfd, (struct sockaddr *)&sa_in, &len) == -1)
 		perror("getpeername");
 
-	char *fname = addr_dirname(sa_in);
+	char *clientaddr = addr_dirname(sa_in);
+	char *filesdir = gen_client_dirs(clientaddr);
+	char *filepath = gen_path(filesdir, basename(node->name));
 
-	FILE *f = fopen(fname, "w");
-	if (NULL == f)
-		exit(EXIT_FAILURE);
+	char *key = read_key(gen_path(KEYS_DIR, clientaddr));
 
-	fwrite(buf, enc_size, 1, f);
-	fclose(f);
+	char *vector = (*list)->vector;
+
+	FILE *fp = fp_init(filepath);
+
+	gcry_cipher_hd_t gcry_handle = decrypt_init(vector, key);
+	char out[CHUNK_SIZE];
+
+	while ((int)(node->size - total_read) > 0) {
+		int n = recv_all(socketfd, buf, node->size);
+
+		decrypt_data(gcry_handle, buf, out, fp, n);
+		total_read += n;
+	}
+
+	free(filepath);
+	free(key);
+	free(clientaddr);
+	fclose(fp);
+	gcry_cipher_close(gcry_handle);
 
 	/*
 		decrypt the file and generate hash
@@ -244,6 +329,10 @@ int main(int argc, char *argv[])
 		port = strdup(DEFAULT_SERVER_PORT);
 
 	int sfd = server_socket(port);
+
+	ensure_dir(KEYS_DIR);
+	ensure_dir(RECV_DIR);
+
 	accept_connection(sfd);
 
 	free(port);
