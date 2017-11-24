@@ -104,17 +104,14 @@ static gcry_cipher_hd_t decrypt_init(char *vector, char *key)
 }
 
 /*
- * Decrypt the data and write it to the a file.
+ * Decrypt a chunk of data from src into dst
  */
-static void decrypt_data(gcry_cipher_hd_t hd, char *encry_data, char *out,
-			 FILE *outfp, int size)
+static void decrypt_data(gcry_cipher_hd_t hd, char *src, char *dst)
 {
 	gcry_error_t err = 0;
 
-	err = gcry_cipher_decrypt(hd, out, CHUNK_SIZE, encry_data, CHUNK_SIZE);
+	err = gcry_cipher_decrypt(hd, dst, CHUNK_SIZE, src, CHUNK_SIZE);
 	g_error(err);
-
-	fwrite(out, 1, size, outfp);
 }
 
 /*
@@ -137,42 +134,15 @@ static char *gen_client_dirs(char *clientdir)
 	return files_path;
 }
 
-/*
- * Open the file for appending. If the file exists then delete it and then open
- * it.
- */
-static FILE *fp_init(char *filepath)
-{
-	if (access(filepath, F_OK) == 0) {
-		if ((unlink(filepath)) == -1)
-			perror("unlink error");
-	}
-
-	FILE *fp;
-
-	fp = fopen(filepath, "a");
-	if (fp == NULL) {
-		perror("fopen error");
-		exit(EXIT_FAILURE);
-	}
-
-	return fp;
-}
-
 static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 {
-	uint64_t total_read = 0;
-
 	data_node *node = datalist_get_index(*list, *pos);
-
 	fprintf(stderr, "receiving %s...\n", node->name);
 
 	if (NULL == node) {
 		fprintf(stderr, "no file to save at idx %d\n", *pos);
 		exit(EXIT_FAILURE);
 	}
-
-	char buf[CHUNK_SIZE];
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
@@ -185,18 +155,28 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	char *filepath = gen_path(filesdir, basename(node->name));
 
 	char *key = read_key(gen_path(KEYS_DIR, clientaddr));
-
 	char *vector = (*list)->vector;
 
-	FILE *fp = fp_init(filepath);
+	FILE *fp = fopen(filepath, "w");
+	if (fp == NULL) {
+		perror("fopen error");
+		exit(EXIT_FAILURE);
+	}
 
 	gcry_cipher_hd_t gcry_handle = decrypt_init(vector, key);
 	char out[CHUNK_SIZE];
+	char buf[CHUNK_SIZE];
+	uint32_t total_read = 0;
 
-	while ((int)(node->size - total_read) > 0) {
-		int n = recv_all(socketfd, buf, node->size);
+	while (total_read < node->size) {
+		int n = recv_all(socketfd, buf, CHUNK_SIZE);
+		if (n < CHUNK_SIZE) {
+			fprintf(stderr, "receiving full chunk failed\n");
+			exit(EXIT_FAILURE);
+		}
 
-		decrypt_data(gcry_handle, buf, out, fp, n);
+		decrypt_data(gcry_handle, buf, out);
+		fwrite(out, 1, CHUNK_SIZE, fp);
 		total_read += n;
 	}
 
@@ -206,20 +186,7 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	fclose(fp);
 	gcry_cipher_close(gcry_handle);
 
-	/*
-		decrypt the file and generate hash
-	*/
-
-	/*
-		check if file matches and return uint8_t 0 on no match
-	*/
-
-	/*
-		save file to correct directory location
-	*/
-
-	fprintf(stderr, "receiving  %s done\n", node->name);
-
+	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
 }
 
