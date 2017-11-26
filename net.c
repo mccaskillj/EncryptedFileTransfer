@@ -18,12 +18,12 @@
 
 #define BACKLOG 10
 
-int write_all(int fd, char *src, int src_len)
+int write_all(int dstfd, uint8_t *src, int src_len)
 {
 	int written = 0;
 
 	while (written < src_len) {
-		int n = write(fd, src + written, src_len - written);
+		int n = write(dstfd, src + written, src_len - written);
 		if (n < 0) {
 			if (errno == EINTR)
 				break;
@@ -36,12 +36,12 @@ int write_all(int fd, char *src, int src_len)
 	return written;
 }
 
-int recv_all(int fd, char *dst, int dst_len)
+int recv_all(int srcfd, uint8_t *dst, int dst_len)
 {
 	int total_read = 0;
 
 	while (total_read < dst_len) {
-		int n = recv(fd, dst + total_read, dst_len - total_read, 0);
+		int n = recv(srcfd, dst + total_read, dst_len - total_read, 0);
 		if (n == -1) {
 			perror("recv failed");
 			exit(EXIT_FAILURE);

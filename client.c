@@ -186,7 +186,7 @@ static uint16_t parse_file_cnt(char *files_arg)
  */
 static int init_transfer(int serv, data_head *dh)
 {
-	char *transfer_header = datalist_generate_payload(dh);
+	uint8_t *transfer_header = datalist_generate_payload(dh);
 	int header_len = HEADER_INIT_SIZE + (dh->size * HEADER_LINE_SIZE);
 
 	int n = write_all(serv, transfer_header, header_len);
@@ -202,19 +202,6 @@ static int init_transfer(int serv, data_head *dh)
 }
 
 /*
- * Encrypt a chunk of data of size src_len from src into dst with the
- * provided key
- */
-static void encrypt_chunk(gcry_cipher_hd_t hd, char *dst, char *src,
-			  int src_len)
-{
-	gcry_error_t err = 0;
-	err = gcry_cipher_encrypt(hd, (unsigned char *)dst, src_len, src,
-				  src_len);
-	g_error(err);
-}
-
-/*
  * Encrypt and Write specified file to the server. Returns true if
  * the file is encrypted and written entirely, false otherwise.
  */
@@ -224,9 +211,10 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 	if (NULL == f)
 		return false;
 
+	gcry_error_t err = 0;
 	// We will re-use the buffers for efficiency
-	char f_buf[CHUNK_SIZE];
-	char enc_buf[CHUNK_SIZE];
+	uint8_t f_buf[CHUNK_SIZE];
+	uint8_t enc_buf[CHUNK_SIZE];
 
 	// Read a chunk from the file, encrypt, and write to server
 	while (1) {
@@ -239,7 +227,9 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 			}
 		}
 
-		encrypt_chunk(hd, enc_buf, f_buf, CHUNK_SIZE);
+		err = gcry_cipher_encrypt(hd, enc_buf, CHUNK_SIZE, f_buf,
+					  CHUNK_SIZE);
+		g_error(err);
 
 		int n = write_all(sfd, enc_buf, CHUNK_SIZE);
 		if (n < CHUNK_SIZE) {
