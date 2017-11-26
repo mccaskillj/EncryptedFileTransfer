@@ -18,7 +18,7 @@
 
 #define BACKLOG 10
 
-int write_all(int dstfd, uint8_t *src, int src_len)
+void write_all(int dstfd, uint8_t *src, int src_len)
 {
 	int written = 0;
 
@@ -32,11 +32,9 @@ int write_all(int dstfd, uint8_t *src, int src_len)
 		}
 		written += n;
 	}
-
-	return written;
 }
 
-int recv_all(int srcfd, uint8_t *dst, int dst_len)
+void recv_all(int srcfd, uint8_t *dst, int dst_len)
 {
 	int total_read = 0;
 
@@ -49,8 +47,6 @@ int recv_all(int srcfd, uint8_t *dst, int dst_len)
 
 		total_read += n;
 	}
-
-	return total_read;
 }
 
 int server_socket(char *port)
