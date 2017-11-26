@@ -84,17 +84,6 @@ static uint8_t *read_initial_header(int socketfd)
 }
 
 /*
- * Decrypt a chunk of data from src into dst
- */
-static void decrypt_data(gcry_cipher_hd_t hd, uint8_t *src, uint8_t *dst)
-{
-	gcry_error_t err = 0;
-
-	err = gcry_cipher_decrypt(hd, dst, CHUNK_SIZE, src, CHUNK_SIZE);
-	g_error(err);
-}
-
-/*
  * Creates a directory for the client and all the sub directories that the
  * client's directory needs
  */
@@ -196,10 +185,10 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 		exit(EXIT_FAILURE);
 	}
 
-	gcry_cipher_hd_t h = init_cipher_context(vector, key);
+	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
 	uint8_t rx_buf[CHUNK_SIZE];
-	uint8_t f_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
+	gcry_error_t err = 0;
 
 	while (total_read < node->size) {
 		int n = recv_all(cfd, rx_buf, CHUNK_SIZE);
@@ -208,8 +197,9 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 			exit(EXIT_FAILURE);
 		}
 
-		decrypt_data(h, rx_buf, f_buf);
-		fwrite(f_buf, 1, CHUNK_SIZE, fp);
+		err = gcry_cipher_decrypt(hd, rx_buf, CHUNK_SIZE, NULL, 0);
+		g_error(err);
+		fwrite(rx_buf, 1, CHUNK_SIZE, fp);
 		total_read += n;
 	}
 
@@ -219,7 +209,7 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 	free(client_files_dir);
 	free(key);
 	free(client_dir_name);
-	gcry_cipher_close(h);
+	gcry_cipher_close(hd);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
