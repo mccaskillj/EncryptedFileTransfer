@@ -15,7 +15,7 @@
 #define KEYS_DIR "keys"
 #define KEYS_DIR_LEN 4
 #define RECV_DIR "received"
-#define HASHS_DIR "hashes"
+#define HASHES_DIR "hashes"
 #define FILES_DIR "files"
 
 /*
@@ -23,7 +23,7 @@
  * if an expected length key is at the specified path. Returns NULL
  * otherwise
  */
-char *read_key(char *key_path);
+uint8_t *read_key(char *key_path);
 
 /*
  * Ensure the directory at the given path exists. Create the dir if
@@ -45,8 +45,8 @@ char *addr_dirname(struct sockaddr_storage s);
 uint32_t filesize(char *path);
 
 /*
- * Generate absolute path from a given directory path and a filename
+ * Concatenate two file paths. s2 is appended to s1
  */
-char *gen_path(char *dirpath, char *filename);
+char *concat_paths(char *s1, char *s2);
 
 #endif

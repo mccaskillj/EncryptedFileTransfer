@@ -3,7 +3,7 @@
 
 #include "datalist.h"
 
-data_head *header_parse(char *header);
+data_head *header_parse(uint8_t *header);
 
 /*
  * Parse the next file requested by the server

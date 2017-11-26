@@ -10,6 +10,7 @@
 #define COMMON_H
 
 #include <gcrypt.h>
+#include <stdint.h>
 
 #define DEFAULT_SERVER_PORT "6060"
 
@@ -52,7 +53,7 @@ void init_gcrypt();
  * Initialize an AES-256 cipher context with the given initialization
  * vector and key
  */
-gcry_cipher_hd_t init_cipher_context(char *vector, char *key);
+gcry_cipher_hd_t init_cipher_context(uint8_t *vector, uint8_t *key);
 
 /*
  * Return the number of padding bytes needed for a raw size to fit

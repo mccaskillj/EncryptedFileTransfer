@@ -47,7 +47,7 @@ void init_gcrypt()
 	gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 }
 
-gcry_cipher_hd_t init_cipher_context(char *vector, char *key)
+gcry_cipher_hd_t init_cipher_context(uint8_t *vector, uint8_t *key)
 {
 	gcry_cipher_hd_t hd;
 	gcry_error_t err = 0;
