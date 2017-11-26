@@ -17,7 +17,7 @@ typedef struct data_node {
 	struct data_node *next;
 	char *name;
 	uint32_t size;
-	char *hash;
+	uint8_t *hash;
 	int transfer;
 } data_node;
 
@@ -25,12 +25,12 @@ typedef struct data_head {
 	data_node *first;
 	data_node *last;
 	uint32_t size;
-	char *vector;
+	uint8_t *vector;
 } data_head;
 
-data_head *datalist_init(char *vector);
+data_head *datalist_init(uint8_t *vector);
 
-void datalist_append(data_head *list, char *name, uint32_t size, char *hash);
+void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash);
 
 void datalist_remove(data_head *list, data_node *node);
 

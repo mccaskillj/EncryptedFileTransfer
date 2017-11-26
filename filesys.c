@@ -67,7 +67,7 @@ char *addr_dirname(struct sockaddr_storage s)
 	return ip_port;
 }
 
-char *read_key(char *key_path)
+uint8_t *read_key(char *key_path)
 {
 	struct stat st;
 
@@ -82,7 +82,7 @@ char *read_key(char *key_path)
 	if (NULL == fp)
 		return NULL;
 
-	char *key = malloc(KEY_SIZE);
+	uint8_t *key = malloc(KEY_SIZE);
 	if (NULL == key)
 		mem_error();
 
@@ -126,12 +126,12 @@ uint32_t filesize(char *path)
 	return st.st_size;
 }
 
-char *gen_path(char *dirpath, char *filename)
+char *concat_paths(char *s1, char *s2)
 {
 	char *path = malloc(PATH_MAX);
 	if (path == NULL)
 		mem_error();
 
-	snprintf(path, PATH_MAX, "%s/%s", dirpath, filename);
+	snprintf(path, PATH_MAX, "%s/%s", s1, s2);
 	return path;
 }

@@ -7,21 +7,21 @@
 #include "datalist.h"
 #include "parser.h"
 
-static void header_add_node(data_head *list, char *file_data)
+static void header_add_node(data_head *list, uint8_t *file_data)
 {
-	char *name = file_data;
+	char *name = (char *)file_data;
 
 	uint32_t raw_enc_size;
 	memcpy(&raw_enc_size, file_data + NAME_BYTES, sizeof(uint32_t));
 
-	char *hash = file_data + NAME_BYTES + SIZE_BYTES;
+	uint8_t *hash = file_data + NAME_BYTES + SIZE_BYTES;
 	datalist_append(list, name, ntohl(raw_enc_size), hash);
 }
 
-data_head *header_parse(char *header)
+data_head *header_parse(uint8_t *header)
 {
 	int num_files;
-	char *read_loc = header;
+	uint8_t *read_loc = header;
 
 	uint16_t files_raw;
 	memcpy(&files_raw, read_loc, sizeof(uint16_t));

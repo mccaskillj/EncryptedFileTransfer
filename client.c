@@ -45,11 +45,11 @@ static void usage(char *bin_path, int exit_status)
 /*
  * Generate the initialization vector for a file transfer
  */
-static char *generate_vector()
+static uint8_t *generate_vector()
 {
 	srand(time(NULL));
 
-	char *vector = malloc(INIT_VEC_BYTES);
+	uint8_t *vector = malloc(INIT_VEC_BYTES);
 	if (NULL == vector)
 		mem_error();
 
@@ -98,15 +98,15 @@ static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
  * an array of pointers to hashes in the same order as the argument.
  * Will return NULL if one of the file paths is invalid.
  */
-static char **generate_hashes(char **to_transfer, uint16_t num_files)
+static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 {
-	char **hashes = malloc(num_files * sizeof(char *));
+	uint8_t **hashes = malloc(num_files * sizeof(uint8_t *));
 	if (NULL == hashes)
 		mem_error();
 
 	gcry_md_hd_t hd;
 	gcry_error_t err;
-	char tmpbuf[HASH_CHUNK_SIZE];
+	uint8_t tmpbuf[HASH_CHUNK_SIZE];
 
 	err = gcry_md_open(&hd, GCRY_MD_SHA512, 0);
 	if (err) {
@@ -263,16 +263,16 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
  * false otherwise.
  */
 static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
-			   char *loc_port, char *comma_files, char *key)
+			   char *loc_port, char *comma_files, uint8_t *key)
 {
 	// Prep for transfer
 	uint16_t num_files = parse_file_cnt(comma_files);
 	char **files = parse_filepaths(comma_files, num_files);
 	uint32_t *sizes = parse_sizes(files, num_files);
 
-	char *vector = generate_vector();
+	uint8_t *vector = generate_vector();
 	init_gcrypt();
-	char **hashes = generate_hashes(files, num_files);
+	uint8_t **hashes = generate_hashes(files, num_files);
 	if (NULL == hashes)
 		exit(EXIT_FAILURE);
 
@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
 	if (NULL == r_port)
 		r_port = strdup(DEFAULT_SERVER_PORT);
 
-	char *key = read_key(key_path);
+	uint8_t *key = read_key(key_path);
 	if (NULL == key) {
 		fprintf(stderr, "reading key %s failed\n", key_path);
 		exit(EXIT_FAILURE);

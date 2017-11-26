@@ -8,6 +8,7 @@
 
 #include <getopt.h>
 #include <libgen.h>
+#include <limits.h>
 #include <netdb.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -37,14 +38,14 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
-static char *read_initial_header(int socketfd)
+static uint8_t *read_initial_header(int socketfd)
 {
 	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
 	uint64_t files_info = HEADER_LINE_SIZE;
-	char *buf = NULL;
+	uint8_t *buf = NULL;
 
-	char initial_read[header_size];
+	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
 	fprintf(stdout, "reading initial transfer header bytes\n");
@@ -99,9 +100,9 @@ static void decrypt_data(gcry_cipher_hd_t hd, char *src, char *dst)
  */
 static char *gen_client_dirs(char *clientdir)
 {
-	char *client_path = gen_path(RECV_DIR, clientdir);
-	char *hash_path = gen_path(client_path, HASHS_DIR);
-	char *files_path = gen_path(client_path, FILES_DIR);
+	char *client_path = concat_paths(RECV_DIR, clientdir);
+	char *hash_path = concat_paths(client_path, HASHES_DIR);
+	char *files_path = concat_paths(client_path, FILES_DIR);
 
 	ensure_dir(client_path);
 	free(client_path);
@@ -113,30 +114,83 @@ static char *gen_client_dirs(char *clientdir)
 	return files_path;
 }
 
-static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
+/*
+ * Save the given hash in the clients hash directory as a symbolic link
+ * to the file the hash represents.
+ */
+static void save_hash(uint8_t *hash, char *filename, char *client_dir_name)
 {
-	data_node *node = datalist_get_index(*list, *pos);
-	fprintf(stderr, "receiving %s...\n", node->name);
+	char *received_dir = concat_paths(RECV_DIR, client_dir_name);
+	char *hash_rel = concat_paths(received_dir, HASHES_DIR);
 
-	if (NULL == node) {
-		fprintf(stderr, "no file to save at idx %d\n", *pos);
+	char *up_dir = concat_paths("..", FILES_DIR);
+	char *file_loc_rel = concat_paths(up_dir, filename);
+
+	char svr_wd[PATH_MAX];
+	getcwd(svr_wd, PATH_MAX);
+
+	int err = chdir(hash_rel); // sym link from client hashes dir
+	if (err == -1) {
+		perror("chdir to client hashes");
 		exit(EXIT_FAILURE);
 	}
+
+	// Binary hash needs to be converted to readable and fs acceptable
+	// format, so use hex
+	char hex[HASH_BYTES * 2 + 1];
+
+	for (int i = 0; i < HASH_BYTES; i++) {
+		snprintf(&hex[i * 2], 2 * HASH_BYTES + 1, "%02X", hash[i]);
+	}
+	hex[HASH_BYTES * 2] = '\0';
+
+	err = symlink(file_loc_rel, hex);
+	if (err == -1) {
+		perror("symlink saving hash");
+		exit(EXIT_FAILURE);
+	}
+
+	err = chdir(svr_wd); // back to where we were
+	if (err == -1) {
+		perror("chdir to server wd");
+		exit(EXIT_FAILURE);
+	}
+
+	free(up_dir);
+	free(file_loc_rel);
+	free(received_dir);
+	free(hash_rel);
+}
+
+/*
+ * Receive the file at the given index in the list from a client,
+ * and write the file and hash to the clients directory space
+ */
+static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
+{
+	data_node *node = datalist_get_index(*list, pos);
+	if (NULL == node) {
+		fprintf(stderr, "no file to save at idx %d\n", pos);
+		exit(EXIT_FAILURE);
+	}
+	fprintf(stderr, "receiving %s...\n", node->name);
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
 
-	if (getpeername(socketfd, (struct sockaddr *)&sa_in, &len) == -1)
+	if (getpeername(cfd, (struct sockaddr *)&sa_in, &len) == -1) {
 		perror("getpeername");
+		exit(EXIT_FAILURE);
+	}
 
-	char *clientaddr = addr_dirname(sa_in);
-	char *filesdir = gen_client_dirs(clientaddr);
-	char *filepath = gen_path(filesdir, basename(node->name));
+	char *client_dir_name = addr_dirname(sa_in);
+	char *client_files_dir = gen_client_dirs(client_dir_name);
+	char *file_path = concat_paths(client_files_dir, basename(node->name));
 
-	char *key = read_key(gen_path(KEYS_DIR, clientaddr));
-	char *vector = (*list)->vector;
+	uint8_t *key = read_key(concat_paths(KEYS_DIR, client_dir_name));
+	uint8_t *vector = (*list)->vector;
 
-	FILE *fp = fopen(filepath, "w");
+	FILE *fp = fopen(file_path, "w");
 	if (fp == NULL) {
 		perror("fopen");
 		exit(EXIT_FAILURE);
@@ -148,7 +202,7 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 	uint32_t total_read = 0;
 
 	while (total_read < node->size) {
-		int n = recv_all(socketfd, rx_buf, CHUNK_SIZE);
+		int n = recv_all(cfd, rx_buf, CHUNK_SIZE);
 		if (n < CHUNK_SIZE) {
 			fprintf(stderr, "receiving full chunk failed\n");
 			exit(EXIT_FAILURE);
@@ -159,10 +213,12 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 		total_read += n;
 	}
 
-	free(filepath);
-	free(key);
-	free(clientaddr);
+	save_hash(node->hash, node->name, client_dir_name);
 	fclose(fp);
+	free(file_path);
+	free(client_files_dir);
+	free(key);
+	free(client_dir_name);
 	gcry_cipher_close(h);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
@@ -172,7 +228,7 @@ static uint8_t save_file(int socketfd, data_head **list, uint16_t *pos)
 static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 {
 	uint32_t sent_total = 0;
-	char *read_val = NULL;
+	uint8_t *read_val = NULL;
 	char return_string[RETURN_SIZE];
 	memset(return_string, 0, RETURN_SIZE);
 	uint8_t status = 0;
@@ -181,7 +237,7 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
 	} else {
-		status = save_file(socketfd, list, pos);
+		status = receive_file(socketfd, list, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
 	}
 
