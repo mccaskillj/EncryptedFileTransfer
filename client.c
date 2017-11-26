@@ -123,8 +123,8 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 
 		FILE *f = fopen(to_transfer[i], "r");
 		if (NULL == f) {
-			fprintf(stderr, "%.*s: %s\n", NAME_BYTES, to_transfer[i],
-				strerror(errno));
+			fprintf(stderr, "%.*s: %s\n", NAME_BYTES,
+				to_transfer[i], strerror(errno));
 			exit(EXIT_FAILURE);
 		}
 
@@ -282,7 +282,7 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 	// Initialize the transfer by sending the initialization header
 	data_head *dh = datalist_init(vector);
 	for (int i = 0; i < num_files; i++) {
-		datalist_append(dh, files[i], sizes[i], hashes[i]);
+		datalist_append(dh, basename(files[i]), sizes[i], hashes[i]);
 	}
 
 	fprintf(stdout, "connecting to server\n");

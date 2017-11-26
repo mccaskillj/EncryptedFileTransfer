@@ -174,7 +174,7 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 
 	char *client_dir_name = addr_dirname(sa_in);
 	char *client_files_dir = gen_client_dirs(client_dir_name);
-	char *file_path = concat_paths(client_files_dir, basename(node->name));
+	char *file_path = concat_paths(client_files_dir, node->name);
 
 	uint8_t *key = read_key(concat_paths(KEYS_DIR, client_dir_name));
 	uint8_t *vector = (*list)->vector;
