@@ -38,13 +38,3 @@ data_head *header_parse(uint8_t *header)
 
 	return list;
 }
-
-uint16_t parse_next_file(char *request)
-{
-	uint16_t next = 0;
-	next += request[1];
-	next += request[0] << 8;
-	return next;
-}
-
-uint8_t parse_transfer_status(char *request) { return request[2]; }

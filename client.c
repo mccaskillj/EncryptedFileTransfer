@@ -6,6 +6,7 @@
  *  Purpose: Client (txer) entry point.
  */
 
+#include <errno.h>
 #include <gcrypt.h>
 #include <getopt.h>
 #include <libgen.h>
@@ -122,9 +123,9 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 
 		FILE *f = fopen(to_transfer[i], "r");
 		if (NULL == f) {
-			fprintf(stderr, "open %s failed: digest\n",
-				to_transfer[i]);
-			return NULL;
+			fprintf(stderr, "%.*s: %s\n", NAME_BYTES, to_transfer[i],
+				strerror(errno));
+			exit(EXIT_FAILURE);
 		}
 
 		while (1) {
@@ -180,8 +181,28 @@ static uint16_t parse_file_cnt(char *files_arg)
 }
 
 /*
+ * Parse the next file requested by the server to transfer
+ */
+static uint16_t parse_next_file(uint8_t *request)
+{
+	uint16_t next = 0;
+	next += request[1];
+	next += request[0] << 8;
+	return next;
+}
+
+/*
+ * Parse the pass/fail status of a file transfer from the server
+ * file request
+ */
+static bool transfer_passed(uint8_t *request)
+{
+	return request[2] == TRANSFER_Y;
+}
+
+/*
  * Initialize the file transfer with the server by sending the file
- * transfer header. Returns index of file requested by server, -1
+ * transfer header. Returns index of file requested by server, 0
  * otherwise.
  */
 static int init_transfer(int serv, data_head *dh)
@@ -189,14 +210,16 @@ static int init_transfer(int serv, data_head *dh)
 	uint8_t *transfer_header = datalist_generate_payload(dh);
 	int header_len = HEADER_INIT_SIZE + (dh->size * HEADER_LINE_SIZE);
 
-	int n = write_all(serv, transfer_header, header_len);
-	if (n != header_len)
-		return -1;
+	write_all(serv, transfer_header, header_len);
 
-	char request[RETURN_SIZE];
-	n = recv(serv, request, RETURN_SIZE, 0);
-	if (n != RETURN_SIZE)
-		return -1;
+	uint8_t request[RETURN_SIZE];
+	recv_all(serv, request, RETURN_SIZE);
+
+	// Verify the server has clients key
+	static const uint8_t no_key[RETURN_SIZE] = {0};
+	if (memcmp(request, no_key, 3) == 3) {
+		return 0;
+	}
 
 	return parse_next_file(request);
 }
@@ -228,12 +251,7 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 		err = gcry_cipher_encrypt(hd, f_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
 
-		int n = write_all(sfd, f_buf, CHUNK_SIZE);
-		if (n < CHUNK_SIZE) {
-			fprintf(stderr, "failed to write encoded buffer\n");
-			fclose(f);
-			return false;
-		}
+		write_all(sfd, f_buf, CHUNK_SIZE);
 
 		if (f_len < CHUNK_SIZE)
 			break;
@@ -260,8 +278,6 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 	uint8_t *vector = generate_vector();
 	init_gcrypt();
 	uint8_t **hashes = generate_hashes(files, num_files);
-	if (NULL == hashes)
-		exit(EXIT_FAILURE);
 
 	// Initialize the transfer by sending the initialization header
 	data_head *dh = datalist_init(vector);
@@ -272,10 +288,15 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 	fprintf(stdout, "connecting to server\n");
 	int sfd = client_socket(svr_ip, svr_port, loc_ip, loc_port);
 	uint32_t requested_idx = init_transfer(sfd, dh);
+	if (requested_idx == 0) {
+		fprintf(stderr, "no AES key on server\n");
+		return false;
+	}
+
 	fprintf(stdout, "got first file request for file %d\n", requested_idx);
 
-	char resp_buf[RETURN_SIZE]; // Server response after file sent
-	bool all_sent = true;
+	uint8_t resp_buf[RETURN_SIZE]; // Server response after file sent
+	bool all_sent = true; // Whether ALL files were sent successfully
 	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
 
 	// We send any files the server requests
@@ -297,8 +318,14 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 			break;
 		}
 
-		fprintf(stdout, "transferring  %.*s done\n", NAME_BYTES,
-			files[idx]);
+		fprintf(stdout, "transferring %.*s ", NAME_BYTES, files[idx]);
+		if (!transfer_passed(resp_buf)) {
+			all_sent = false;
+			fprintf(stdout, "failed\n");
+		} else {
+			fprintf(stdout, "succeeded\n");
+		}
+
 		requested_idx = parse_next_file(resp_buf);
 	}
 
@@ -371,7 +398,7 @@ int main(int argc, char *argv[])
 	bool ok = transfer_files(r_ip, r_port, l_ip, l_port, file_paths, key);
 	if (!ok) {
 		status = EXIT_FAILURE;
-		fprintf(stderr, "transferring files failed\n");
+		fprintf(stderr, "transferring all files failed\n");
 	}
 
 	if (l_port != NULL)

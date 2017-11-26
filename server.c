@@ -191,16 +191,12 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 	gcry_error_t err = 0;
 
 	while (total_read < node->size) {
-		int n = recv_all(cfd, rx_buf, CHUNK_SIZE);
-		if (n < CHUNK_SIZE) {
-			fprintf(stderr, "receiving full chunk failed\n");
-			exit(EXIT_FAILURE);
-		}
+		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
 		err = gcry_cipher_decrypt(hd, rx_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
 		fwrite(rx_buf, 1, CHUNK_SIZE, fp);
-		total_read += n;
+		total_read += CHUNK_SIZE;
 	}
 
 	save_hash(node->hash, node->name, client_dir_name);
