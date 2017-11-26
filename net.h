@@ -12,9 +12,13 @@
 /*
  * Write an entire source buffer to the destination socket
  */
-int write_all(int dst, char *src, int src_len);
+int write_all(int dstfd, uint8_t *src, int src_len);
 
-int recv_all(int socketfd, char *buf, int size);
+/*
+ * Receive dst_len bytes from the source socket into destination
+ * buffer
+ */
+int recv_all(int srcfd, uint8_t *dst, int dst_len);
 
 /*
  * Open a TCP socket that is connected to the specified

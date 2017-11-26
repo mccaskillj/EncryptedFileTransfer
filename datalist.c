@@ -109,7 +109,7 @@ void datalist_remove(data_head *list, data_node *node)
 	node = NULL;
 }
 
-static void datalist_copy_item(data_node *node, char *copy_location)
+static void datalist_copy_item(data_node *node, uint8_t *copy_location)
 {
 	memcpy(copy_location, node->name, NAME_BYTES);
 	copy_location += NAME_BYTES;
@@ -121,10 +121,10 @@ static void datalist_copy_item(data_node *node, char *copy_location)
 	memcpy(copy_location, node->hash, HASH_BYTES);
 }
 
-char *datalist_generate_payload(data_head *list)
+uint8_t *datalist_generate_payload(data_head *list)
 {
-	char *payload;
-	char *copy_location;
+	uint8_t *payload;
+	uint8_t *copy_location;
 	data_node *pos = list->first;
 
 	int payload_size = HEADER_INIT_SIZE;

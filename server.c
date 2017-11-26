@@ -86,7 +86,7 @@ static uint8_t *read_initial_header(int socketfd)
 /*
  * Decrypt a chunk of data from src into dst
  */
-static void decrypt_data(gcry_cipher_hd_t hd, char *src, char *dst)
+static void decrypt_data(gcry_cipher_hd_t hd, uint8_t *src, uint8_t *dst)
 {
 	gcry_error_t err = 0;
 
@@ -197,8 +197,8 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 	}
 
 	gcry_cipher_hd_t h = init_cipher_context(vector, key);
-	char rx_buf[CHUNK_SIZE];
-	char f_buf[CHUNK_SIZE];
+	uint8_t rx_buf[CHUNK_SIZE];
+	uint8_t f_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
 
 	while (total_read < node->size) {
@@ -276,8 +276,7 @@ static void accept_connection(int socketfd)
 			continue;
 		}
 
-		// Duplicate process and check for failure. Close the sockets
-		// and terminate program.
+		// Duplicate process and check for failure
 		if ((pid = fork()) == -1) {
 			perror("fork error");
 			close(socketfd);
@@ -285,8 +284,8 @@ static void accept_connection(int socketfd)
 			exit(EXIT_FAILURE);
 		}
 
-		// Child process; sends a stream of bytes to the sender
 		if (pid == 0) {
+			// Child process; sends a stream of bytes to the sender
 			close(socketfd);
 
 			while (list == NULL || pos <= list->size)
@@ -295,9 +294,9 @@ static void accept_connection(int socketfd)
 			datalist_destroy(list);
 			close(recvfd);
 			fprintf(stdout, "done reading files from client\n\n");
-			// Parent process; loop back to accept more connections
 			break;
 		} else {
+			// Parent process; loop back to accept more connections
 			close(recvfd);
 			continue;
 		}
