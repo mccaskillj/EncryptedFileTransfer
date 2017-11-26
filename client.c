@@ -212,9 +212,7 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 		return false;
 
 	gcry_error_t err = 0;
-	// We will re-use the buffers for efficiency
 	uint8_t f_buf[CHUNK_SIZE];
-	uint8_t enc_buf[CHUNK_SIZE];
 
 	// Read a chunk from the file, encrypt, and write to server
 	while (1) {
@@ -227,11 +225,10 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 			}
 		}
 
-		err = gcry_cipher_encrypt(hd, enc_buf, CHUNK_SIZE, f_buf,
-					  CHUNK_SIZE);
+		err = gcry_cipher_encrypt(hd, f_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
 
-		int n = write_all(sfd, enc_buf, CHUNK_SIZE);
+		int n = write_all(sfd, f_buf, CHUNK_SIZE);
 		if (n < CHUNK_SIZE) {
 			fprintf(stderr, "failed to write encoded buffer\n");
 			fclose(f);
