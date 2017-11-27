@@ -8,6 +8,8 @@
  */
 
 #include <arpa/inet.h>
+#include <libgen.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,7 +50,7 @@ static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash)
 	if (node == NULL)
 		mem_error();
 
-	node->name = calloc(NAME_BYTES, 1);
+	node->name = calloc(PATH_MAX, 1);
 	if (node->name == NULL)
 		mem_error();
 	memcpy(node->name, name, NAME_BYTES);
@@ -111,7 +113,7 @@ void datalist_remove(data_head *list, data_node *node)
 
 static void datalist_copy_item(data_node *node, uint8_t *copy_location)
 {
-	memcpy(copy_location, node->name, NAME_BYTES);
+	memcpy(copy_location, basename(node->name), NAME_BYTES);
 	copy_location += NAME_BYTES;
 
 	uint32_t net_file_size = htonl(node->size);
