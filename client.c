@@ -374,8 +374,10 @@ static bool transfer_files(client *c)
 			break;
 		}
 
-		if (!transfer_passed(resp_buf))
+		if (!transfer_passed(resp_buf)) {
 			all_sent = false;
+			break;
+		}
 
 		requested_idx = parse_next_file(resp_buf);
 		file = datalist_get_index(c->transferring, requested_idx);
