@@ -6,6 +6,7 @@
  *  Purpose: Server (rxer) entry point.
  */
 
+#include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
 #include <limits.h>
@@ -248,7 +249,7 @@ static void accept_connection(int socketfd)
 	data_head *list = NULL;
 	uint16_t pos = 1;
 
-	while (1) {
+	while (!TERMINATED) {
 		// Structs for storing the sender's address and port
 		struct sockaddr_storage recv_addr;
 		memset(&recv_addr, 0, sizeof(recv_addr));
@@ -258,6 +259,8 @@ static void accept_connection(int socketfd)
 		int recvfd =
 		    accept(socketfd, (struct sockaddr *)&recv_addr, &recv_size);
 		if (recvfd == -1) {
+			if (errno == EINTR)
+				break;
 			perror("accept");
 			continue;
 		}
@@ -295,6 +298,7 @@ int main(int argc, char *argv[])
 {
 	int opt = 0;
 	char *port = NULL;
+	init_sig_handler();
 
 	while ((opt = getopt(argc, argv, "p:h")) != -1) {
 		switch (opt) {

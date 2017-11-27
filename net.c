@@ -41,6 +41,8 @@ void recv_all(int srcfd, uint8_t *dst, int dst_len)
 	while (total_read < dst_len) {
 		int n = recv(srcfd, dst + total_read, dst_len - total_read, 0);
 		if (n == -1) {
+			if (errno == EINTR)
+				break;
 			perror("recv failed");
 			exit(EXIT_FAILURE);
 		}

@@ -12,6 +12,19 @@
 
 #include "common.h"
 
+sig_atomic_t TERMINATED;
+
+/*
+ * Changes TERMINATED to 1. Passed into a signal handler for SIGINT
+ */
+static void handle() { TERMINATED = 1; }
+
+void init_sig_handler()
+{
+	TERMINATED = 0;
+	signal(SIGINT, handle);
+}
+
 void g_error(gcry_error_t err)
 {
 	if (err) {
