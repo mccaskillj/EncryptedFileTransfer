@@ -23,6 +23,17 @@
 #include "net.h"
 #include "parser.h"
 
+typedef struct {
+	uint8_t *key;
+	uint8_t *vector;
+	data_head *transferring;
+
+	char *l_port;
+	char *l_ip;
+	char *r_port;
+	char *r_ip;
+} client;
+
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -211,6 +222,7 @@ static int init_transfer(int serv, data_head *dh)
 	int header_len = HEADER_INIT_SIZE + (dh->size * HEADER_LINE_SIZE);
 
 	write_all(serv, transfer_header, header_len);
+	free(transfer_header);
 
 	uint8_t request[RETURN_SIZE];
 	recv_all(serv, request, RETURN_SIZE);
@@ -262,49 +274,94 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 }
 
 /*
- * Transfer comma separated files from the specified local port to the
- * server at the specified destination port with the given AES key.
- * Returns true on successful transfer of all non-duplicate files,
- * false otherwise.
+ * Create a new client that encapsulates what is needed to transfer
+ * files to the server
  */
-static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
-			   char *loc_port, char *comma_files, uint8_t *key)
+static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
+			  char *loc_port, char *comma_files, char *key_path)
 {
-	// Prep for transfer
+	client *c = malloc(sizeof(client));
+	if (NULL == c)
+		mem_error();
+
+	// Determine file names, sizes, and hashes and store them
 	uint16_t num_files = parse_file_cnt(comma_files);
 	char **files = parse_filepaths(comma_files, num_files);
 	uint32_t *sizes = parse_sizes(files, num_files);
 
-	uint8_t *vector = generate_vector();
 	init_gcrypt();
+	c->vector = generate_vector();
 	uint8_t **hashes = generate_hashes(files, num_files);
 
-	// Initialize the transfer by sending the initialization header
-	data_head *dh = datalist_init(vector);
+	c->transferring = datalist_init(c->vector);
 	for (int i = 0; i < num_files; i++) {
-		datalist_append(dh, basename(files[i]), sizes[i], hashes[i]);
+		datalist_append(c->transferring, basename(files[i]), sizes[i],
+				hashes[i]);
+		free(files[i]);
+		free(hashes[i]);
 	}
 
+	c->key = read_key(key_path);
+	if (NULL == c->key) {
+		fprintf(stderr, "reading key %s failed\n", key_path);
+		exit(EXIT_FAILURE);
+	}
+
+	c->r_port = svr_port;
+	c->r_ip = svr_ip;
+	c->l_port = loc_port;
+	c->l_ip = loc_ip;
+
+	free(files);
+	free(hashes);
+	free(sizes);
+	return c;
+}
+
+/*
+ * Release all resources for a client
+ */
+void destroy_client(client *c)
+{
+	datalist_destroy(c->transferring);
+	free(c->key);
+	free(c->vector);
+	free(c);
+	c = NULL;
+}
+
+/*
+ * Connect to the server and transfer files for the given client
+ * configuration. Returns true on successful transfer of all
+ * non-duplicate files, false otherwise.
+ */
+static bool transfer_files(client *c)
+{
 	fprintf(stdout, "connecting to server\n");
-	int sfd = client_socket(svr_ip, svr_port, loc_ip, loc_port);
-	uint32_t requested_idx = init_transfer(sfd, dh);
+	int sfd = client_socket(c->r_ip, c->r_port, c->l_ip, c->l_port);
+	uint32_t requested_idx = init_transfer(sfd, c->transferring);
 	if (requested_idx == 0) {
 		fprintf(stderr, "no AES key on server\n");
 		return false;
+	}
+
+	data_node *file = datalist_get_index(c->transferring, requested_idx);
+	if (NULL == file) {
+		fprintf(stderr, "bad first file request from server\n");
+		exit(EXIT_FAILURE);
 	}
 
 	fprintf(stdout, "got first file request for file %d\n", requested_idx);
 
 	uint8_t resp_buf[RETURN_SIZE]; // Server response after file sent
 	bool all_sent = true; // Whether ALL files were sent successfully
-	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
+	gcry_cipher_hd_t hd = init_cipher_context(c->vector, c->key);
 
 	// We send any files the server requests
-	while (requested_idx > 0 && requested_idx <= num_files) {
-		int idx = requested_idx - 1; // 1 based in protocol
-		fprintf(stdout, "transferring %.*s...\n", NAME_BYTES,
-			files[idx]);
-		bool ok = send_file(sfd, hd, files[idx]);
+	while (file != NULL) {
+		fprintf(stdout, "transferring %s...\n", file->name);
+
+		bool ok = send_file(sfd, hd, file->name);
 		if (!ok) {
 			fprintf(stderr, "writing file failed\n");
 			all_sent = false;
@@ -318,30 +375,14 @@ static bool transfer_files(char *svr_ip, char *svr_port, char *loc_ip,
 			break;
 		}
 
-		fprintf(stdout, "transferring %.*s ", NAME_BYTES, files[idx]);
-		if (!transfer_passed(resp_buf)) {
+		if (!transfer_passed(resp_buf))
 			all_sent = false;
-			fprintf(stdout, "failed\n");
-		} else {
-			fprintf(stdout, "succeeded\n");
-		}
 
 		requested_idx = parse_next_file(resp_buf);
+		file = datalist_get_index(c->transferring, requested_idx);
 	}
 
-	// Cleanup
 	gcry_cipher_close(hd);
-
-	for (int i = 0; i < num_files; i++) {
-		free(files[i]);
-		free(hashes[i]);
-	}
-
-	free(files);
-	free(hashes);
-	free(sizes);
-	free(vector);
-	datalist_destroy(dh);
 	return all_sent;
 }
 
@@ -380,7 +421,8 @@ int main(int argc, char *argv[])
 	}
 
 	if (NULL == file_paths)
-		usage(argv[0], EXIT_FAILURE); // Files required for transfer
+		usage(argv[0],
+		      EXIT_FAILURE); // Files required for transfer
 
 	if (NULL == key_path)
 		key_path = strdup(DEFAULT_KEY_PATH);
@@ -388,18 +430,17 @@ int main(int argc, char *argv[])
 	if (NULL == r_port)
 		r_port = strdup(DEFAULT_SERVER_PORT);
 
-	uint8_t *key = read_key(key_path);
-	if (NULL == key) {
-		fprintf(stderr, "reading key %s failed\n", key_path);
-		exit(EXIT_FAILURE);
-	}
+	client *c =
+	    new_client(r_ip, r_port, l_ip, l_port, file_paths, key_path);
 
 	int status = EXIT_SUCCESS;
-	bool ok = transfer_files(r_ip, r_port, l_ip, l_port, file_paths, key);
+	bool ok = transfer_files(c);
 	if (!ok) {
 		status = EXIT_FAILURE;
 		fprintf(stderr, "transferring all files failed\n");
 	}
+
+	destroy_client(c);
 
 	if (l_port != NULL)
 		free(l_port);
@@ -412,7 +453,6 @@ int main(int argc, char *argv[])
 
 	free(r_port);
 	free(key_path);
-	free(key);
 	free(file_paths);
 	return status;
 }
