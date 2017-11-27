@@ -165,7 +165,7 @@ void datalist_destroy(data_head *list)
 
 data_node *datalist_get_index(data_head *list, uint32_t index)
 {
-	if (index > list->size)
+	if (index > list->size || index < 1)
 		return NULL;
 
 	data_node *node = list->first;
