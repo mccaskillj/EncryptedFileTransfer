@@ -189,14 +189,22 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 	uint8_t rx_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
 	gcry_error_t err = 0;
+	uint32_t bytes_left = node->size;
+	uint32_t fwrite_size = CHUNK_SIZE;
 
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
 		err = gcry_cipher_decrypt(hd, rx_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
-		fwrite(rx_buf, 1, CHUNK_SIZE, fp);
 		total_read += CHUNK_SIZE;
+
+		// Last chunk is handled here
+		if (bytes_left < CHUNK_SIZE)
+			fwrite_size = bytes_left;
+
+		fwrite(rx_buf, 1, fwrite_size, fp);
+		bytes_left -= CHUNK_SIZE;
 	}
 
 	save_hash(node->hash, node->name, client_dir_name);
