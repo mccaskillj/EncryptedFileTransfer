@@ -228,6 +228,8 @@ static void handle_conn(int cfd)
 	data_head *list = NULL;
 	uint16_t pos = 1;
 	char *ip_port;
+	uint8_t failure[RETURN_SIZE];
+	int dir_len;
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
@@ -296,6 +298,16 @@ static void accept_connection(int socketfd)
 			// Child process
 			close(socketfd);
 
+			ip_port = make_ip_port(&recv_addr, recv_size);
+			dir_len = snprintf(NULL, 0, "keys/%s", ip_port);
+			char key_loc[dir_len + 1];
+			snprintf(key_loc, dir_len + 1, "keys/%s", ip_port);
+			if (filesize(key_loc) == 0) {
+				memset(failure, 0, RETURN_SIZE);
+				write_all(recvfd, failure, RETURN_SIZE);
+				break;
+			}
+			
 			handle_conn(recvfd);
 
 			close(recvfd);
