@@ -139,7 +139,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 			exit(EXIT_FAILURE);
 		}
 
-		while (1) {
+		while (!TERMINATED) {
 			int len = fread(tmpbuf, 1, HASH_CHUNK_SIZE, f);
 
 			gcry_md_write(hd, tmpbuf, len);
@@ -250,7 +250,7 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath)
 	uint8_t f_buf[CHUNK_SIZE];
 
 	// Read a chunk from the file, encrypt, and write to server
-	while (1) {
+	while (!TERMINATED) {
 		int f_len = fread(f_buf, 1, CHUNK_SIZE, f);
 
 		// Remaining bytes in file buf are set to random garbage
@@ -393,6 +393,7 @@ int main(int argc, char *argv[])
 	char *l_port = NULL, *l_ip = NULL;
 	char *r_port = NULL, *r_ip = NULL;
 	char *key_path = NULL, *file_paths = NULL;
+	init_sig_handler();
 
 	while ((opt = getopt(argc, argv, "l:r:k:f:h")) != -1) {
 		switch (opt) {

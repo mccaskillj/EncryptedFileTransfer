@@ -11,6 +11,7 @@
 
 #include <gcrypt.h>
 #include <stdint.h>
+#include <signal.h>
 
 #define DEFAULT_SERVER_PORT "6060"
 
@@ -32,6 +33,13 @@
 
 #define AES_BLOCKSIZE 16 // bytes - 128 bits
 #define KEY_SIZE 32      // bytes - 256 bits
+
+extern sig_atomic_t TERMINATED;
+
+/*
+ * Initialize the signal handler for SIGINT
+ */
+void init_sig_handler();
 
 /*
  * Checks if the return value from any gcry functions contains an error or not
