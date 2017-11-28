@@ -125,3 +125,17 @@ char *parse_port(char *ip_port)
 	port[port_len] = '\0';
 	return port;
 }
+
+char *hash_to_hex(uint8_t *hash)
+{
+	char *hex = malloc(HASH_BYTES * 2 + 1);
+	if (NULL == hex)
+		mem_error();
+
+	for (int i = 0; i < HASH_BYTES; i++) {
+		snprintf(&hex[i * 2], 2 * HASH_BYTES + 1, "%02X", hash[i]);
+	}
+
+	hex[HASH_BYTES * 2] = '\0';
+	return hex;
+}

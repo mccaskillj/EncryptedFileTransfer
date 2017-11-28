@@ -81,4 +81,10 @@ char *parse_ip(char *ip_port);
  */
 char *parse_port(char *ip_port);
 
+/*
+ * Convert a binary hash to hex representation safe for file system
+ * and terminal use
+ */
+char *hash_to_hex(uint8_t *hash);
+
 #endif
