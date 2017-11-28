@@ -188,7 +188,7 @@ static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
 }
 
 static void read_from_client(int socketfd, data_head **list, uint8_t *key,
-				 uint16_t *pos, char *ip_port)
+				 uint16_t *pos)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -198,7 +198,7 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
-		*list = header_parse(read_val, ip_port);
+		*list = header_parse(read_val);
 		*pos = datalist_get_next_active(*list, *pos);
 	} else {
 		status = receive_file(socketfd, list, key, *pos);
@@ -260,7 +260,7 @@ static void handle_conn(int cfd, char *ip_port)
 	}
 
 	while (list == NULL || pos <= list->size)
-		read_from_client(cfd, &list, key, &pos, ip_port);
+		read_from_client(cfd, &list, key, &pos);
 
 	datalist_destroy(list);
 	free(client_path);
