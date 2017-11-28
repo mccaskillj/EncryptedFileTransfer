@@ -127,8 +127,12 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 		exit(EXIT_FAILURE);
 	}
 
+	spinner *s = init_spinner("Hashing");
+
 	// Hash each file and store it. We will re-use the cipher handle
 	for (int i = 0; i < num_files; i++) {
+		spin_reset(s, basename(to_transfer[i]));
+
 		hashes[i] = malloc(HASH_BYTES);
 		if (NULL == hashes[i])
 			mem_error();
@@ -142,8 +146,9 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 
 		while (!TERMINATED) {
 			int len = fread(tmpbuf, 1, HASH_CHUNK_SIZE, f);
-
 			gcry_md_write(hd, tmpbuf, len);
+			spin_update(s);
+
 			if (len < HASH_CHUNK_SIZE)
 				break;
 		}
@@ -154,6 +159,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 		fclose(f);
 	}
 
+	spin_destroy(s);
 	gcry_md_close(hd);
 	return hashes;
 }
@@ -362,7 +368,8 @@ static bool transfer_files(client *c)
 
 	// We send any files the server requests
 	while (file != NULL) {
-		prg_reset(pb, file->size / CHUNK_SIZE, CHUNK_SIZE, file->name);
+		prg_reset(pb, file->size / CHUNK_SIZE, CHUNK_SIZE,
+			  basename(file->name));
 
 		bool ok = send_file(sfd, hd, file->name, pb);
 		if (!ok) {

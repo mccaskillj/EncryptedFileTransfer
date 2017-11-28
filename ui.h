@@ -24,9 +24,19 @@
 #ifndef UI_H
 #define UI_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
 #include <time.h>
+
+typedef struct {
+	int idx;
+	int term_width;
+	struct timeval last_spin; // wall clock time
+	const char *desc;
+	const char *task_name;
+	const char *stages;
+} spinner;
 
 typedef struct {
 	float next_bar; // % of next bar
@@ -68,5 +78,26 @@ void prg_error(prg_bar *pg, const char *msg);
  * Release resources for the given progress bar
  */
 void prg_destroy(prg_bar *pg);
+
+/*
+ * Create a spinner for a given task name
+ */
+spinner *init_spinner(const char *task_name);
+
+/*
+ * Reset the spinner for a new description
+ */
+void spin_reset(spinner *s, const char *desc);
+
+/*
+ * Rotate the spinner to the next stage when a given time has
+ * passed since the last write to the terminal
+ */
+void spin_update(spinner *s);
+
+/*
+ * Release resources for a given spinner
+ */
+void spin_destroy(spinner *s);
 
 #endif
