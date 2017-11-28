@@ -13,28 +13,30 @@ static int check_duplicate(uint8_t *hash, char *ip_port)
 {
 	DIR *d;
 	struct dirent *directory;
+	char *hex_hash;
 
-	int file_path_size = snprintf(NULL, 0, "received/%s/", ip_port);
+	int file_path_size = snprintf(NULL, 0, "./");
 
 	char filepath[file_path_size + 1];
 
-	snprintf(filepath, file_path_size + 1, "received/%s/", ip_port);
+	snprintf(filepath, file_path_size + 1, "./");
 
 	d = opendir(filepath);
 	if (d) {
 		directory = readdir(d);
 		while (directory != NULL) {
-			if (directory->d_name[0] != 'f') {
-				printf("%s\n", directory->d_name);
-				if (memcmp(directory->d_name, hash, HASH_BYTES) == 0)
+			if (directory->d_name[0] != '.') {
+				hex_hash = hash_to_hex(hash);
+				if (memcmp(directory->d_name, hex_hash, HASH_BYTES * 2) == 0){
 					return TRANSFER_N;
+				}
 			}
 			directory = readdir(d);
 		}
 		closedir(d);
 	}
 
-	(void)hash;
+	(void)ip_port;
 
 	return TRANSFER_Y;
 }
