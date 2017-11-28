@@ -18,8 +18,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include "common.h"
 
@@ -100,7 +100,7 @@ int server_socket(char *port)
 
 	// Set the read timeout
 	timeout.tv_sec = TIMEOUT_SEC;
-    timeout.tv_usec = TIMEOUT_USEC;
+	timeout.tv_usec = TIMEOUT_USEC;
 
 	if ((rv = getaddrinfo(NULL, port, &hints, &results)) == -1) {
 		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
@@ -124,12 +124,19 @@ int server_socket(char *port)
 			exit(EXIT_FAILURE);
 		}
 
-		rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
-                sizeof(timeout));
+		rv = setsockopt(socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+				sizeof(timeout));
 		if (rv == -1) {
-        	perror("setsockopt error");
-        	exit(EXIT_FAILURE);
-        }
+			perror("setsockopt error");
+			exit(EXIT_FAILURE);
+		}
+
+		rv = setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+				sizeof(timeout));
+		if (rv == -1) {
+			perror("setsockopt error");
+			exit(EXIT_FAILURE);
+		}
 
 		rv = bind(socketfd, p->ai_addr, p->ai_addrlen);
 		if (rv == -1) {
@@ -166,7 +173,7 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 	struct timeval timeout;
 
 	timeout.tv_sec = TIMEOUT_SEC;
-    timeout.tv_usec = TIMEOUT_USEC;
+	timeout.tv_usec = TIMEOUT_USEC;
 
 	raddr.sin_family = AF_INET;
 	raddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -196,12 +203,19 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 		exit(EXIT_FAILURE);
 	}
 
-	rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
-            sizeof(timeout));
+	rv = setsockopt(socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+			sizeof(timeout));
 	if (rv == -1) {
-    	perror("setsockopt error");
-    	exit(EXIT_FAILURE);
-    }
+		perror("setsockopt error");
+		exit(EXIT_FAILURE);
+	}
+
+	rv = setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+			sizeof(timeout));
+	if (rv == -1) {
+		perror("setsockopt error");
+		exit(EXIT_FAILURE);
+	}
 
 	if (NULL != loc_port) {
 		rv = bind(socketfd, (struct sockaddr *)&laddr, sizeof(laddr));
