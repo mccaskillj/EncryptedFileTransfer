@@ -34,6 +34,9 @@
 #define AES_BLOCKSIZE 16 // bytes - 128 bits
 #define KEY_SIZE 32      // bytes - 256 bits
 
+#define TIMEOUT_SEC 1
+#define TIMEOUT_USEC 0
+
 extern sig_atomic_t TERMINATED;
 
 /*

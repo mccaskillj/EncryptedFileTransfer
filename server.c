@@ -286,7 +286,9 @@ static void accept_connection(int socketfd)
 		if (recvfd == -1) {
 			if (errno == EINTR)
 				break;
-			perror("accept");
+			
+			if (errno != EWOULDBLOCK)
+				perror("accept");
 			continue;
 		}
 

@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "common.h"
 
@@ -83,6 +84,7 @@ int server_socket(char *port)
 {
 	int socketfd, rv;
 	struct addrinfo hints, *results, *p;
+	struct timeval timeout;
 
 	// Clear hints and set the options for TCP
 	memset(&hints, 0, sizeof(hints));
@@ -90,6 +92,10 @@ int server_socket(char *port)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_protocol = IPPROTO_TCP;
+
+	// Set the read timeout
+	timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = TIMEOUT_USEC;
 
 	if ((rv = getaddrinfo(NULL, port, &hints, &results)) == -1) {
 		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
@@ -112,6 +118,13 @@ int server_socket(char *port)
 			perror("setsockopt error");
 			exit(EXIT_FAILURE);
 		}
+
+		rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
+                sizeof(timeout));
+		if (rv == -1) {
+        	perror("setsockopt error");
+        	exit(EXIT_FAILURE);
+        }
 
 		rv = bind(socketfd, p->ai_addr, p->ai_addrlen);
 		if (rv == -1) {
@@ -145,6 +158,10 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 	struct sockaddr_in raddr, laddr;
 	memset(&raddr, 0, sizeof(raddr));
 	memset(&laddr, 0, sizeof(laddr));
+	struct timeval timeout;
+
+	timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = TIMEOUT_USEC;
 
 	raddr.sin_family = AF_INET;
 	raddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -173,6 +190,13 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 		perror("socket");
 		exit(EXIT_FAILURE);
 	}
+
+	rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
+            sizeof(timeout));
+	if (rv == -1) {
+    	perror("setsockopt error");
+    	exit(EXIT_FAILURE);
+    }
 
 	if (NULL != loc_port) {
 		rv = bind(socketfd, (struct sockaddr *)&laddr, sizeof(laddr));
