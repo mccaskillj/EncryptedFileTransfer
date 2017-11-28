@@ -119,14 +119,7 @@ int server_socket(char *port)
 			exit(EXIT_FAILURE);
 		}
 
-		rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-                sizeof(timeout));
-		if (rv == -1) {
-        	perror("setsockopt error");
-        	exit(EXIT_FAILURE);
-        }
-
-        rv = setsockopt (socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+		rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
                 sizeof(timeout));
 		if (rv == -1) {
         	perror("setsockopt error");
@@ -198,14 +191,7 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 		exit(EXIT_FAILURE);
 	}
 
-	rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-            sizeof(timeout));
-	if (rv == -1) {
-    	perror("setsockopt error");
-    	exit(EXIT_FAILURE);
-    }
-
-    rv = setsockopt (socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
+	rv = setsockopt (socketfd, SOL_SOCKET, SO_RCVTIMEO | SO_SNDTIMEO, &timeout,
             sizeof(timeout));
 	if (rv == -1) {
     	perror("setsockopt error");
