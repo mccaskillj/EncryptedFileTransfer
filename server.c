@@ -228,6 +228,7 @@ static void handle_conn(int cfd, char *ip_port)
 {
 	data_head *list = NULL;
 	uint16_t pos = 0;
+	uint8_t failure[RETURN_SIZE];
 	
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
@@ -240,6 +241,12 @@ static void handle_conn(int cfd, char *ip_port)
 	// Ensure the client has a valid key on the server
 	char *key_location = concat_paths(KEYS_DIR, ip_port);
 	uint8_t *key = read_key(key_location);
+
+	if (key == NULL) {
+		memset(failure, 0, RETURN_SIZE);
+		write_all(cfd, failure, RETURN_SIZE);
+		return;
+	}
 
 	// Ensure the client has a directory for their files
 	char *client_path = concat_paths(RECV_DIR, ip_port);
@@ -266,8 +273,6 @@ static void accept_connection(int socketfd)
 {
 	pid_t pid;
 	char *ip_port;
-	int dir_len;
-	uint8_t failure[RETURN_SIZE];
 
 	while (!TERMINATED) {
 		// Structs for storing the sender's address and port
@@ -297,16 +302,8 @@ static void accept_connection(int socketfd)
 			// Child process
 			close(socketfd);
 
+
 			ip_port = make_ip_port(&recv_addr, recv_size);
-			dir_len = snprintf(NULL, 0, "keys/%s", ip_port);
-			char key_loc[dir_len + 1];
-			snprintf(key_loc, dir_len + 1, "keys/%s", ip_port);
-			if (filesize(key_loc) == 0) {
-				memset(failure, 0, RETURN_SIZE);
-				write_all(recvfd, failure, RETURN_SIZE);
-				break;
-			}
-			
 			handle_conn(recvfd, ip_port);
 
 			free(ip_port);
