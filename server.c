@@ -227,7 +227,7 @@ static void handle_conn(int cfd)
 {
 	data_head *list = NULL;
 	uint16_t pos = 1;
-	
+
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
 
