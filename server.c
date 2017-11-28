@@ -199,6 +199,7 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val, ip_port);
+		*pos = datalist_get_next_active(*list, *pos);
 	} else {
 		status = receive_file(socketfd, list, key, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
@@ -226,7 +227,7 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 static void handle_conn(int cfd, char *ip_port)
 {
 	data_head *list = NULL;
-	uint16_t pos = 1;
+	uint16_t pos = 0;
 	
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
@@ -235,14 +236,13 @@ static void handle_conn(int cfd, char *ip_port)
 		perror("getpeername");
 		exit(EXIT_FAILURE);
 	}
-	char *client_dir_name = addr_dirname(sa_in);
 
 	// Ensure the client has a valid key on the server
-	char *key_location = concat_paths(KEYS_DIR, client_dir_name);
+	char *key_location = concat_paths(KEYS_DIR, ip_port);
 	uint8_t *key = read_key(key_location);
 
 	// Ensure the client has a directory for their files
-	char *client_path = concat_paths(RECV_DIR, client_dir_name);
+	char *client_path = concat_paths(RECV_DIR, ip_port);
 	ensure_dir(client_path);
 
 	// Work from the clients directory to make fs work easier
@@ -257,7 +257,6 @@ static void handle_conn(int cfd, char *ip_port)
 
 	datalist_destroy(list);
 	free(client_path);
-	free(client_dir_name);
 	free(key_location);
 	free(key);
 	fprintf(stdout, "done reading files from client\n\n");
@@ -310,6 +309,7 @@ static void accept_connection(int socketfd)
 			
 			handle_conn(recvfd, ip_port);
 
+			free(ip_port);
 			close(recvfd);
 			break;
 		} else {
