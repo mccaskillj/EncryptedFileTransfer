@@ -2,12 +2,44 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 
 #include "common.h"
 #include "datalist.h"
 #include "parser.h"
+#include "filesys.h"
 
-static void header_add_node(data_head *list, uint8_t *file_data)
+static int check_duplicate(uint8_t *hash, char *ip_port)
+{
+	DIR *d;
+	struct dirent *directory;
+
+	int file_path_size = snprintf(NULL, 0, "received/%s/", ip_port);
+
+	char filepath[file_path_size + 1];
+
+	snprintf(filepath, file_path_size + 1, "received/%s/", ip_port);
+
+	d = opendir(filepath);
+	if (d) {
+		directory = readdir(d);
+		while (directory != NULL) {
+			if (directory->d_name[0] != 'f') {
+				printf("%s\n", directory->d_name);
+				if (memcmp(directory->d_name, hash, HASH_BYTES) == 0)
+					return TRANSFER_N;
+			}
+			directory = readdir(d);
+		}
+		closedir(d);
+	}
+
+	(void)hash;
+
+	return TRANSFER_Y;
+}
+
+static void header_add_node(data_head *list, uint8_t *file_data, char *ip_port)
 {
 	char *name = (char *)file_data;
 
@@ -15,10 +47,13 @@ static void header_add_node(data_head *list, uint8_t *file_data)
 	memcpy(&raw_enc_size, file_data + NAME_BYTES, sizeof(uint32_t));
 
 	uint8_t *hash = file_data + NAME_BYTES + SIZE_BYTES;
-	datalist_append(list, name, ntohl(raw_enc_size), hash);
+
+	int transfer_flag = check_duplicate(hash, ip_port);
+
+	datalist_append(list, name, ntohl(raw_enc_size), hash, transfer_flag);
 }
 
-data_head *header_parse(uint8_t *header)
+data_head *header_parse(uint8_t *header, char *ip_port)
 {
 	int num_files;
 	uint8_t *read_loc = header;
@@ -32,7 +67,7 @@ data_head *header_parse(uint8_t *header)
 	read_loc += INIT_VEC_BYTES;
 
 	for (int i = 0; i < num_files; i++) {
-		header_add_node(list, read_loc);
+		header_add_node(list, read_loc, ip_port);
 		read_loc += NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 	}
 
