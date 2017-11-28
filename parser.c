@@ -9,17 +9,17 @@
 #include "parser.h"
 #include "filesys.h"
 
-static int check_duplicate(uint8_t *hash, char *ip_port)
+static int check_duplicate(uint8_t *hash)
 {
 	DIR *d;
 	struct dirent *directory;
 	char *hex_hash;
 
-	int file_path_size = snprintf(NULL, 0, "./");
+	int file_path_size = snprintf(NULL, 0, CUR_DIR);
 
 	char filepath[file_path_size + 1];
 
-	snprintf(filepath, file_path_size + 1, "./");
+	snprintf(filepath, file_path_size + 1, CUR_DIR);
 
 	d = opendir(filepath);
 	if (d) {
@@ -36,12 +36,10 @@ static int check_duplicate(uint8_t *hash, char *ip_port)
 		closedir(d);
 	}
 
-	(void)ip_port;
-
 	return TRANSFER_Y;
 }
 
-static void header_add_node(data_head *list, uint8_t *file_data, char *ip_port)
+static void header_add_node(data_head *list, uint8_t *file_data)
 {
 	char *name = (char *)file_data;
 
@@ -50,12 +48,12 @@ static void header_add_node(data_head *list, uint8_t *file_data, char *ip_port)
 
 	uint8_t *hash = file_data + NAME_BYTES + SIZE_BYTES;
 
-	int transfer_flag = check_duplicate(hash, ip_port);
+	int transfer_flag = check_duplicate(hash);
 
 	datalist_append(list, name, ntohl(raw_enc_size), hash, transfer_flag);
 }
 
-data_head *header_parse(uint8_t *header, char *ip_port)
+data_head *header_parse(uint8_t *header)
 {
 	int num_files;
 	uint8_t *read_loc = header;
@@ -69,7 +67,7 @@ data_head *header_parse(uint8_t *header, char *ip_port)
 	read_loc += INIT_VEC_BYTES;
 
 	for (int i = 0; i < num_files; i++) {
-		header_add_node(list, read_loc, ip_port);
+		header_add_node(list, read_loc);
 		read_loc += NAME_BYTES + SIZE_BYTES + HASH_BYTES;
 	}
 

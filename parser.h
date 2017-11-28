@@ -3,6 +3,6 @@
 
 #include "datalist.h"
 
-data_head *header_parse(uint8_t *header, char *ip_port);
+data_head *header_parse(uint8_t *header);
 
 #endif /*PARSER_H*/
