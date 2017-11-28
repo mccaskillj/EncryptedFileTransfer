@@ -30,7 +30,7 @@ typedef struct data_head {
 
 data_head *datalist_init(uint8_t *vector);
 
-void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash);
+void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash, int transfer);
 
 void datalist_remove(data_head *list, data_node *node);
 

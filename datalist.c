@@ -44,7 +44,7 @@ int check_hash(char *name, uint8_t *hash)
 	return TRANSFER_Y;
 }
 
-static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash)
+static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash, int transfer)
 {
 	data_node *node = calloc(1, sizeof(data_node));
 	if (node == NULL)
@@ -60,7 +60,7 @@ static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash)
 		mem_error();
 	memcpy(node->hash, hash, HASH_BYTES);
 
-	node->transfer = check_hash(name, hash);
+	node->transfer = transfer;
 	node->next = NULL;
 	node->prev = NULL;
 	node->size = size;
@@ -68,9 +68,9 @@ static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash)
 	return node;
 }
 
-void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash)
+void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash, int transfer)
 {
-	data_node *newNode = datalist_create_node(name, size, hash);
+	data_node *newNode = datalist_create_node(name, size, hash, transfer);
 	if (list->size == 0) {
 		list->first = newNode;
 		list->last = newNode;

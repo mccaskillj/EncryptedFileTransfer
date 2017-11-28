@@ -188,7 +188,7 @@ static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
 }
 
 static void read_from_client(int socketfd, data_head **list, uint8_t *key,
-			     uint16_t *pos)
+				 uint16_t *pos)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -199,6 +199,7 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
+		*pos = datalist_get_next_active(*list, *pos);
 	} else {
 		status = receive_file(socketfd, list, key, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
@@ -223,11 +224,12 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
  * Handle an incoming client connection. We will ensure they have a
  * directory for files, and a valid key before receiving any files
  */
-static void handle_conn(int cfd)
+static void handle_conn(int cfd, char *ip_port)
 {
 	data_head *list = NULL;
-	uint16_t pos = 1;
-
+	uint16_t pos = 0;
+	uint8_t failure[RETURN_SIZE];
+	
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
 
@@ -235,14 +237,19 @@ static void handle_conn(int cfd)
 		perror("getpeername");
 		exit(EXIT_FAILURE);
 	}
-	char *client_dir_name = addr_dirname(sa_in);
 
 	// Ensure the client has a valid key on the server
-	char *key_location = concat_paths(KEYS_DIR, client_dir_name);
+	char *key_location = concat_paths(KEYS_DIR, ip_port);
 	uint8_t *key = read_key(key_location);
 
+	if (key == NULL) {
+		memset(failure, 0, RETURN_SIZE);
+		write_all(cfd, failure, RETURN_SIZE);
+		return;
+	}
+
 	// Ensure the client has a directory for their files
-	char *client_path = concat_paths(RECV_DIR, client_dir_name);
+	char *client_path = concat_paths(RECV_DIR, ip_port);
 	ensure_dir(client_path);
 
 	// Work from the clients directory to make fs work easier
@@ -257,7 +264,6 @@ static void handle_conn(int cfd)
 
 	datalist_destroy(list);
 	free(client_path);
-	free(client_dir_name);
 	free(key_location);
 	free(key);
 	fprintf(stdout, "done reading files from client\n\n");
@@ -266,6 +272,7 @@ static void handle_conn(int cfd)
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
+	char *ip_port;
 
 	while (!TERMINATED) {
 		// Structs for storing the sender's address and port
@@ -294,7 +301,12 @@ static void accept_connection(int socketfd)
 		if (pid == 0) {
 			// Child process
 			close(socketfd);
-			handle_conn(recvfd);
+
+
+			ip_port = make_ip_port(&recv_addr, recv_size);
+			handle_conn(recvfd, ip_port);
+
+			free(ip_port);
 			close(recvfd);
 			break;
 		} else {
