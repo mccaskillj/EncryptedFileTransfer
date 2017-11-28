@@ -223,14 +223,11 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
  * Handle an incoming client connection. We will ensure they have a
  * directory for files, and a valid key before receiving any files
  */
-static void handle_conn(int cfd)
+static void handle_conn(int cfd, char *ip_port)
 {
 	data_head *list = NULL;
 	uint16_t pos = 1;
-	char *ip_port;
-	uint8_t failure[RETURN_SIZE];
-	int dir_len;
-
+	
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
 
@@ -256,7 +253,7 @@ static void handle_conn(int cfd)
 	}
 
 	while (list == NULL || pos <= list->size)
-		read_from_client(cfd, &list, key, &pos);
+		read_from_client(cfd, &list, key, &pos, ip_port);
 
 	datalist_destroy(list);
 	free(client_path);
@@ -269,6 +266,9 @@ static void handle_conn(int cfd)
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
+	char *ip_port;
+	int dir_len;
+	uint8_t failure[RETURN_SIZE];
 
 	while (!TERMINATED) {
 		// Structs for storing the sender's address and port
@@ -308,7 +308,7 @@ static void accept_connection(int socketfd)
 				break;
 			}
 			
-			handle_conn(recvfd);
+			handle_conn(recvfd, ip_port);
 
 			close(recvfd);
 			break;

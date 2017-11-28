@@ -295,7 +295,7 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 
 	c->transferring = datalist_init(c->vector);
 	for (int i = 0; i < num_files; i++) {
-		datalist_append(dh, basename(files[i]), sizes[i], hashes[i], TRANSFER_Y);
+		datalist_append(c->transferring, basename(files[i]), sizes[i], hashes[i], TRANSFER_Y);
 		free(files[i]);
 		free(hashes[i]);
 	}
