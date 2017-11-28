@@ -6,7 +6,11 @@
  *  Purpose: Networking related functions
  */
 
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE // Enable macros for OS X
+#else
 #define _GNU_SOURCE
+#endif
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -63,8 +67,9 @@ char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)
 	char port[NI_MAXSERV];
 	memset(port, '\0', NI_MAXSERV);
 
-	err = getnameinfo((struct sockaddr *)connection, size, ip, sizeof(ip), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
-	
+	err = getnameinfo((struct sockaddr *)connection, size, ip, sizeof(ip),
+			  port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+
 	/*check for error getting host and port*/
 	if (err != 0)
 		return "";
