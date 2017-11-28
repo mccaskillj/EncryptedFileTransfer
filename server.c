@@ -84,78 +84,52 @@ static uint8_t *read_initial_header(int socketfd)
 }
 
 /*
- * Creates a directory for the client and all the sub directories that the
- * client's directory needs
+ * Save the actual file and the meta file. The actual file uses the hash as the
+ * name, and contains actual file contents received. The meta file is a dotfile
+ * of the hash and contains information about the file.
  */
-static char *gen_client_dirs(char *clientdir)
+static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
 {
-	char *client_path = concat_paths(RECV_DIR, clientdir);
-	char *hash_path = concat_paths(client_path, HASHES_DIR);
-	char *files_path = concat_paths(client_path, FILES_DIR);
+	char *hex = hash_to_hex(hash);
 
-	ensure_dir(client_path);
-	free(client_path);
+	// Write the meta file
+	int hex_size = 2 * HASH_BYTES;
+	char *meta = malloc(hex_size + 2);
+	if (NULL == meta)
+		mem_error();
 
-	ensure_dir(hash_path);
-	free(hash_path);
+	strncpy(meta, ".", 1);
+	memcpy(meta + 1, hex, hex_size);
+	meta[hex_size + 1] = '\0';
 
-	ensure_dir(files_path);
-	return files_path;
-}
-
-/*
- * Save the given hash in the clients hash directory as a symbolic link
- * to the file the hash represents.
- */
-static void save_hash(uint8_t *hash, char *filename, char *client_dir_name)
-{
-	char *received_dir = concat_paths(RECV_DIR, client_dir_name);
-	char *hash_rel = concat_paths(received_dir, HASHES_DIR);
-
-	char *up_dir = concat_paths("..", FILES_DIR);
-	char *file_loc_rel = concat_paths(up_dir, filename);
-
-	char svr_wd[PATH_MAX];
-	getcwd(svr_wd, PATH_MAX);
-
-	int err = chdir(hash_rel); // sym link from client hashes dir
-	if (err == -1) {
-		perror("chdir to client hashes");
+	FILE *fp = fopen(meta, "w");
+	if (NULL == fp) {
+		perror("fopen meta");
 		exit(EXIT_FAILURE);
 	}
 
-	// Binary hash needs to be converted to readable and fs acceptable
-	// format, so use hex
-	char hex[HASH_BYTES * 2 + 1];
+	fwrite("filename: ", 1, 10, fp);
+	fwrite(dst_name, 1, NAME_BYTES, fp);
+	fwrite("\n", 1, 1, fp);
+	fclose(fp);
 
-	for (int i = 0; i < HASH_BYTES; i++) {
-		snprintf(&hex[i * 2], 2 * HASH_BYTES + 1, "%02X", hash[i]);
-	}
-	hex[HASH_BYTES * 2] = '\0';
-
-	err = symlink(file_loc_rel, hex);
-	if (err == -1) {
-		perror("symlink saving hash");
+	// Rename the temp file - we keep it
+	int r = rename(tmp_name, hex);
+	if (r == -1) {
+		perror("rename");
 		exit(EXIT_FAILURE);
 	}
 
-	err = chdir(svr_wd); // back to where we were
-	if (err == -1) {
-		perror("chdir to server wd");
-		exit(EXIT_FAILURE);
-	}
-
-	free(up_dir);
-	free(file_loc_rel);
-	free(received_dir);
-	free(hash_rel);
+	free(meta);
+	free(hex);
 }
 
 /*
  * Receive the file at the given index in the list from a client,
- * and write the file and hash to the clients directory space
+ * and write the file and meta file to disk (clients dir space)
  */
-static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
+static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
+			    uint16_t pos)
 {
 	data_node *node = datalist_get_index(*list, pos);
 	if (NULL == node) {
@@ -164,27 +138,21 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 	}
 	fprintf(stderr, "receiving %s...\n", node->name);
 
-	struct sockaddr_storage sa_in;
-	socklen_t len = sizeof(sa_in);
-
-	if (getpeername(cfd, (struct sockaddr *)&sa_in, &len) == -1) {
-		perror("getpeername");
+	// Read into a temp file because the hash isn't validated
+	char tmp_name[] = "incoming-XXXXXX";
+	int fd = mkstemp(tmp_name);
+	if (fd == -1) {
+		perror("mkstemp");
 		exit(EXIT_FAILURE);
 	}
 
-	char *client_dir_name = addr_dirname(sa_in);
-	char *client_files_dir = gen_client_dirs(client_dir_name);
-	char *file_path = concat_paths(client_files_dir, node->name);
-
-	uint8_t *key = read_key(concat_paths(KEYS_DIR, client_dir_name));
-	uint8_t *vector = (*list)->vector;
-
-	FILE *fp = fopen(file_path, "w");
+	FILE *fp = fdopen(fd, "w");
 	if (fp == NULL) {
 		perror("fopen");
 		exit(EXIT_FAILURE);
 	}
 
+	uint8_t *vector = (*list)->vector;
 	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
 	uint8_t rx_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
@@ -198,20 +166,20 @@ static uint8_t receive_file(int cfd, data_head **list, uint16_t pos)
 		fwrite(rx_buf, 1, CHUNK_SIZE, fp);
 		total_read += CHUNK_SIZE;
 	}
-
-	save_hash(node->hash, node->name, client_dir_name);
 	fclose(fp);
-	free(file_path);
-	free(client_files_dir);
-	free(key);
-	free(client_dir_name);
+
+	// TODO: calculate and validate the hash against expected.
+	// If the hash doesn't match, delete the temp file and don't
+	// save meta
+	save_files(tmp_name, node->name, node->hash);
 	gcry_cipher_close(hd);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
 }
 
-static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
+static void read_from_client(int socketfd, data_head **list, uint8_t *key,
+			     uint16_t *pos)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -223,7 +191,7 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
 	} else {
-		status = receive_file(socketfd, list, *pos);
+		status = receive_file(socketfd, list, key, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
 	}
 
@@ -242,11 +210,53 @@ static void read_from_client(int socketfd, data_head **list, uint16_t *pos)
 	}
 }
 
+/*
+ * Handle an incoming client connection. We will ensure they have a
+ * directory for files, and a valid key before receiving any files
+ */
+static void handle_conn(int cfd)
+{
+	data_head *list = NULL;
+	uint16_t pos = 1;
+
+	struct sockaddr_storage sa_in;
+	socklen_t len = sizeof(sa_in);
+
+	if (getpeername(cfd, (struct sockaddr *)&sa_in, &len) == -1) {
+		perror("getpeername");
+		exit(EXIT_FAILURE);
+	}
+	char *client_dir_name = addr_dirname(sa_in);
+
+	// Ensure the client has a valid key on the server
+	char *key_location = concat_paths(KEYS_DIR, client_dir_name);
+	uint8_t *key = read_key(key_location);
+
+	// Ensure the client has a directory for their files
+	char *client_path = concat_paths(RECV_DIR, client_dir_name);
+	ensure_dir(client_path);
+
+	// Work from the clients directory to make fs work easier
+	int err = chdir(client_path);
+	if (err == -1) {
+		perror("chdir to client hashes");
+		exit(EXIT_FAILURE);
+	}
+
+	while (list == NULL || pos <= list->size)
+		read_from_client(cfd, &list, key, &pos);
+
+	datalist_destroy(list);
+	free(client_path);
+	free(client_dir_name);
+	free(key_location);
+	free(key);
+	fprintf(stdout, "done reading files from client\n\n");
+}
+
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
-	data_head *list = NULL;
-	uint16_t pos = 1;
 
 	while (1) {
 		// Structs for storing the sender's address and port
@@ -271,15 +281,10 @@ static void accept_connection(int socketfd)
 		}
 
 		if (pid == 0) {
-			// Child process; sends a stream of bytes to the sender
+			// Child process
 			close(socketfd);
-
-			while (list == NULL || pos <= list->size)
-				read_from_client(recvfd, &list, &pos);
-
-			datalist_destroy(list);
+			handle_conn(recvfd);
 			close(recvfd);
-			fprintf(stdout, "done reading files from client\n\n");
 			break;
 		} else {
 			// Parent process; loop back to accept more connections
