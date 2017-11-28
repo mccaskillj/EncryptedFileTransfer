@@ -17,6 +17,7 @@
 #define RECV_DIR "received"
 #define HASHES_DIR "hashes"
 #define FILES_DIR "files"
+#define CUR_DIR "./"
 
 /*
  * Read a 256 bit key from a file at the specified path. Returns a key
