@@ -33,4 +33,9 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port);
  */
 int server_socket(char *port);
 
+/*
+ * Make the ip:port string for use in the file structure
+ */
+char *make_ip_port(struct sockaddr_storage *connection, socklen_t size);
+
 #endif

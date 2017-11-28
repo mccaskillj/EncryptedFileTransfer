@@ -4,7 +4,7 @@
 # Makefile rules for building secure file transfer transmitter and receiver
 
 CC = gcc
-CFLAGS = -Wall -Werror -Wextra -pedantic -Wno-missing-braces -Wshadow -Wpointer-arith -pedantic-errors -std=c99 -D_POSIX_C_SOURCE=200809L
+CFLAGS = -Wall -Werror -Wextra -pedantic -Wno-missing-braces -Wshadow -Wpointer-arith -pedantic-errors -std=c99 -D_POSIX_C_SOURCE=201112L
 
 .PHONY: all clean
 

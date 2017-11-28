@@ -6,6 +6,8 @@
  *  Purpose: Networking related functions
  */
 
+#define _GNU_SOURCE
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -49,6 +51,32 @@ void recv_all(int srcfd, uint8_t *dst, int dst_len)
 
 		total_read += n;
 	}
+}
+
+char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)
+{
+	int err;
+	int str_size;
+	char *ip_port;
+	char ip[NI_MAXHOST];
+	memset(ip, '\0', NI_MAXHOST);
+	char port[NI_MAXSERV];
+	memset(port, '\0', NI_MAXSERV);
+
+	err = getnameinfo((struct sockaddr *)connection, size, ip, sizeof(ip), port, sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV);
+	
+	/*check for error getting host and port*/
+	if (err != 0)
+		return "";
+
+	str_size = snprintf(NULL, 0, "%s:%s", ip, port);
+	ip_port = calloc(str_size + 1, sizeof(char));
+	if (ip_port == NULL)
+		mem_error();
+
+	snprintf(ip_port, str_size + 1, "%s:%s", ip, port);
+
+	return ip_port;
 }
 
 int server_socket(char *port)

@@ -188,7 +188,7 @@ static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
 }
 
 static void read_from_client(int socketfd, data_head **list, uint8_t *key,
-			     uint16_t *pos)
+				 uint16_t *pos, char *ip_port)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -198,7 +198,7 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
-		*list = header_parse(read_val);
+		*list = header_parse(read_val, ip_port);
 	} else {
 		status = receive_file(socketfd, list, key, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
@@ -227,6 +227,7 @@ static void handle_conn(int cfd)
 {
 	data_head *list = NULL;
 	uint16_t pos = 1;
+	char *ip_port;
 
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
@@ -294,7 +295,9 @@ static void accept_connection(int socketfd)
 		if (pid == 0) {
 			// Child process
 			close(socketfd);
+
 			handle_conn(recvfd);
+
 			close(recvfd);
 			break;
 		} else {
