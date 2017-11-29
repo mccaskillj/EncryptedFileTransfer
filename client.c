@@ -56,24 +56,6 @@ static void usage(char *bin_path, int exit_status)
 }
 
 /*
- * Generate the initialization vector for a file transfer
- */
-static uint8_t *generate_vector()
-{
-	srand(time(NULL));
-
-	uint8_t *vector = malloc(INIT_VEC_BYTES);
-	if (NULL == vector)
-		mem_error();
-
-	for (int i = 0; i < INIT_VEC_BYTES; i++) {
-		vector[i] = rand() % 255;
-	}
-
-	return vector;
-}
-
-/*
  * Parse comma separated file paths into an array of strings.
  */
 static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
@@ -255,11 +237,8 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 		int f_len = fread(f_buf, 1, CHUNK_SIZE, f);
 
 		// Remaining bytes in file buf are set to random garbage
-		if (f_len < CHUNK_SIZE) {
-			for (int i = f_len; i < CHUNK_SIZE; i++) {
-				f_buf[i] = rand() % 255;
-			}
-		}
+		gcry_randomize(f_buf + f_len, CHUNK_SIZE - f_len,
+			       GCRY_STRONG_RANDOM);
 
 		err = gcry_cipher_encrypt(hd, f_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
@@ -291,13 +270,17 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 	char **files = parse_filepaths(comma_files, num_files);
 	uint32_t *sizes = parse_sizes(files, num_files);
 
-	init_gcrypt();
-	c->vector = generate_vector();
+	c->vector = malloc(INIT_VEC_BYTES);
+	if (NULL == c->vector)
+		mem_error();
+	gcry_create_nonce(c->vector, INIT_VEC_BYTES);
+
 	uint8_t **hashes = generate_hashes(files, num_files);
 
 	c->transferring = datalist_init(c->vector);
 	for (int i = 0; i < num_files; i++) {
-		datalist_append(c->transferring, files[i], sizes[i], hashes[i], TRANSFER_Y);
+		datalist_append(c->transferring, files[i], sizes[i], hashes[i],
+				TRANSFER_Y);
 		free(files[i]);
 		free(hashes[i]);
 	}
@@ -438,6 +421,7 @@ int main(int argc, char *argv[])
 	if (NULL == r_port)
 		r_port = strdup(DEFAULT_SERVER_PORT);
 
+	init_gcrypt();
 	client *c =
 	    new_client(r_ip, r_port, l_ip, l_port, file_paths, key_path);
 
