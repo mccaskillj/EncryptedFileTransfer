@@ -85,6 +85,34 @@ char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)
 	return ip_port;
 }
 
+/*
+ * Set the socket to re-use the bound address, and use the given
+ * timeout for reading and writing
+ */
+static void set_socket_options(int sfd, struct timeval timeout)
+{
+	int value = 1;
+	int rv = setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(int));
+	if (rv == -1) {
+		perror("setsockopt reuse error");
+		exit(EXIT_FAILURE);
+	}
+
+	rv =
+	    setsockopt(sfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+	if (rv == -1) {
+		perror("setsockopt snd error");
+		exit(EXIT_FAILURE);
+	}
+
+	rv =
+	    setsockopt(sfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+	if (rv == -1) {
+		perror("setsockopt rcv error");
+		exit(EXIT_FAILURE);
+	}
+}
+
 int server_socket(char *port)
 {
 	int socketfd, rv;
@@ -115,28 +143,7 @@ int server_socket(char *port)
 			continue;
 		}
 
-		int value = 1;
-
-		rv = setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &value,
-				sizeof(int));
-		if (rv == -1) {
-			perror("setsockopt error");
-			exit(EXIT_FAILURE);
-		}
-
-		rv = setsockopt(socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
-				sizeof(timeout));
-		if (rv == -1) {
-			perror("setsockopt error");
-			exit(EXIT_FAILURE);
-		}
-
-		rv = setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-				sizeof(timeout));
-		if (rv == -1) {
-			perror("setsockopt error");
-			exit(EXIT_FAILURE);
-		}
+		set_socket_options(socketfd, timeout);
 
 		rv = bind(socketfd, p->ai_addr, p->ai_addrlen);
 		if (rv == -1) {
@@ -203,19 +210,7 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 		exit(EXIT_FAILURE);
 	}
 
-	rv = setsockopt(socketfd, SOL_SOCKET, SO_SNDTIMEO, &timeout,
-			sizeof(timeout));
-	if (rv == -1) {
-		perror("setsockopt error");
-		exit(EXIT_FAILURE);
-	}
-
-	rv = setsockopt(socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-			sizeof(timeout));
-	if (rv == -1) {
-		perror("setsockopt error");
-		exit(EXIT_FAILURE);
-	}
+	set_socket_options(socketfd, timeout);
 
 	if (NULL != loc_port) {
 		rv = bind(socketfd, (struct sockaddr *)&laddr, sizeof(laddr));
