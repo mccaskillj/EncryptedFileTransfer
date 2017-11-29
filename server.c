@@ -251,14 +251,6 @@ static void handle_conn(int cfd, char *ip_port)
 	uint8_t failure[RETURN_SIZE];
 	gcry_cipher_hd_t hd = NULL;
 
-	struct sockaddr_storage sa_in;
-	socklen_t len = sizeof(sa_in);
-
-	if (getpeername(cfd, (struct sockaddr *)&sa_in, &len) == -1) {
-		perror("getpeername");
-		exit(EXIT_FAILURE);
-	}
-
 	// Ensure the client has a valid key on the server
 	char *key_location = concat_paths(KEYS_DIR, ip_port);
 	uint8_t *key = read_key(key_location);

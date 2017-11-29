@@ -34,12 +34,6 @@ uint8_t *read_key(char *key_path);
 bool ensure_dir(char *path);
 
 /*
- * Returns the directory name for a given address in ip:port form.
- * Returns NULL if the address structure is not IPv4 or IPv6
- */
-char *addr_dirname(struct sockaddr_storage s);
-
-/*
  * Return the size of a file in bytes at the given path. Will return
  * 0 if the path isn't a valid file
  */
