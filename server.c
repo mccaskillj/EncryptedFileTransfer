@@ -218,7 +218,11 @@ static void read_from_client(gcry_cipher_hd_t *hd, int socketfd,
 	if (*list == NULL) {
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
+
 		*pos = datalist_get_next_active(*list, *pos);
+		if (*pos > (*list)->size)
+			return; // All files are duplicates off the bat
+
 		*hd = init_cipher_context((*list)->vector, key);
 	} else {
 		status = receive_file(hd, socketfd, list, *pos);

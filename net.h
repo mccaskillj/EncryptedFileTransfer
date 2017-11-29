@@ -16,9 +16,10 @@ void write_all(int dstfd, uint8_t *src, int src_len);
 
 /*
  * Receive dst_len bytes from the source socket into destination
- * buffer
+ * buffer. Returns 0 when the socket is closed, dst_len echoed
+ * otherwise
  */
-void recv_all(int srcfd, uint8_t *dst, int dst_len);
+int recv_all(int srcfd, uint8_t *dst, int dst_len);
 
 /*
  * Open a TCP socket that is connected to the specified

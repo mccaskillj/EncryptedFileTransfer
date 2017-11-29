@@ -41,7 +41,7 @@ void write_all(int dstfd, uint8_t *src, int src_len)
 	}
 }
 
-void recv_all(int srcfd, uint8_t *dst, int dst_len)
+int recv_all(int srcfd, uint8_t *dst, int dst_len)
 {
 	int total_read = 0;
 
@@ -53,9 +53,13 @@ void recv_all(int srcfd, uint8_t *dst, int dst_len)
 			perror("recv failed");
 			exit(EXIT_FAILURE);
 		}
+		if (n == 0)
+			return 0;
 
 		total_read += n;
 	}
+
+	return total_read;
 }
 
 char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)

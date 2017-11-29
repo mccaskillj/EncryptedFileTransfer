@@ -203,7 +203,7 @@ static bool transfer_passed(uint8_t *request)
 /*
  * Initialize the file transfer with the server by sending the file
  * transfer header. Returns index of file requested by server, 0
- * otherwise.
+ * when all files are duplicates, and -1 when no key exists
  */
 static int init_transfer(int serv, data_head *dh)
 {
@@ -214,7 +214,9 @@ static int init_transfer(int serv, data_head *dh)
 	free(transfer_header);
 
 	uint8_t request[RETURN_SIZE];
-	recv_all(serv, request, RETURN_SIZE);
+	int r = recv_all(serv, request, RETURN_SIZE);
+	if (r == 0)
+		return 0;
 
 	// Verify the server has clients key
 	static const uint8_t no_key[RETURN_SIZE] = {0};
@@ -286,7 +288,7 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 	c->transferring = datalist_init(c->vector);
 	for (int i = 0; i < num_files; i++) {
 		datalist_append(c->transferring, files[i], sizes[i], hashes[i],
-				TRANSFER_Y);
+				TRANSFER_N);
 		free(files[i]);
 		free(hashes[i]);
 	}
@@ -311,13 +313,32 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 /*
  * Release all resources for a client
  */
-void destroy_client(client *c)
+static void destroy_client(client *c)
 {
 	datalist_destroy(c->transferring);
 	free(c->key);
 	free(c->vector);
 	free(c);
 	c = NULL;
+}
+
+/*
+ * Log all duplicate files that were destined to be transferred
+ * to the server by the given client
+ */
+static void log_duplicates(client *c)
+{
+	int idx = 1;
+	data_node *n = datalist_get_index(c->transferring, idx);
+
+	while (n != NULL) {
+		if (n->transfer == TRANSFER_N)
+			fprintf(stderr, "%s already exists on server\n",
+				basename(n->name));
+
+		idx += 1;
+		n = datalist_get_index(c->transferring, idx);
+	}
 }
 
 /*
@@ -330,22 +351,25 @@ static bool transfer_files(client *c)
 	fprintf(stdout, "Connecting to server...\n");
 	int sfd = client_socket(c->r_ip, c->r_port, c->l_ip, c->l_port);
 
-	uint32_t requested_idx = init_transfer(sfd, c->transferring);
-	if (requested_idx == 0) {
+	int requested_idx = init_transfer(sfd, c->transferring);
+	if (requested_idx == -1) {
 		fprintf(stderr, "No AES key on server\n");
 		return false;
+	} else if (requested_idx == 0) {
+		fprintf(stderr, "All files exist on server already\n");
+		return true;
 	}
 
 	data_node *file = datalist_get_index(c->transferring, requested_idx);
 	if (NULL == file) {
-		fprintf(stderr, "bad first file request from server\n");
+		fprintf(stderr, "Bad first file request from server\n");
 		exit(EXIT_FAILURE);
 	}
 
 	fprintf(stdout, "Server initiated file transfer\n");
 
 	uint8_t resp_buf[RETURN_SIZE]; // Server response after file sent
-	bool all_sent = true; // Whether ALL files were sent successfully
+	bool all_sent = true; // Whether all NON-duplicate were successful
 	gcry_cipher_hd_t hd = init_cipher_context(c->vector, c->key);
 	prg_bar *pb = init_prg_bar();
 
@@ -361,12 +385,7 @@ static bool transfer_files(client *c)
 			break;
 		}
 
-		int n = recv(sfd, resp_buf, RETURN_SIZE, 0);
-		if (n != RETURN_SIZE) {
-			prg_error(pb, "bad transfer response from server");
-			all_sent = false;
-			break;
-		}
+		recv_all(sfd, resp_buf, RETURN_SIZE);
 
 		if (!transfer_passed(resp_buf)) {
 			prg_error(pb, "server indicated the transfer failed");
@@ -374,11 +393,13 @@ static bool transfer_files(client *c)
 			break;
 		}
 
+		file->transfer = TRANSFER_Y;
 		requested_idx = parse_next_file(resp_buf);
 		file = datalist_get_index(c->transferring, requested_idx);
 	}
 
 	prg_destroy(pb);
+	log_duplicates(c);
 	gcry_cipher_close(hd);
 	return all_sent;
 }
