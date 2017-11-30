@@ -26,6 +26,44 @@
 #include "net.h"
 #include "parser.h"
 
+/*
+ * Transfer context while receiving file(s) from
+ * a client
+ */
+typedef struct {
+	gcry_cipher_hd_t hd;
+	data_head *list;
+	uint16_t cur;    // Index of current file
+	char *client_id; // ip:port
+	uint8_t *key;
+} transfer_ctx;
+
+/*
+ * Create a new transfer context for the client ip:port
+ */
+static transfer_ctx *new_transfer_ctx(char *client_id)
+{
+	transfer_ctx *t = malloc(sizeof(transfer_ctx));
+	if (NULL == t)
+		mem_error();
+
+	t->client_id = client_id;
+	t->cur = 0;
+	t->list = NULL;
+	t->hd = NULL;
+	t->key = NULL;
+	return t;
+}
+
+/*
+ * Release resources for a transfer context
+ */
+static void destroy_transfer_ctx(transfer_ctx *t)
+{
+	free(t);
+	t = NULL;
+}
+
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -129,12 +167,11 @@ static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
  * Receive the file at the given index in the list from a client,
  * and write the file and meta file to disk (clients dir space)
  */
-static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
-			    uint16_t pos)
+static uint8_t receive_file(int cfd, transfer_ctx *t)
 {
-	data_node *node = datalist_get_index(*list, pos);
+	data_node *node = datalist_get_index(t->list, t->cur);
 	if (NULL == node) {
-		fprintf(stderr, "no file to save at idx %d\n", pos);
+		fprintf(stderr, "no file to save at idx %d\n", t->cur);
 		exit(EXIT_FAILURE);
 	}
 	fprintf(stderr, "receiving %s...\n", node->name);
@@ -166,7 +203,7 @@ static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
-		err = gcry_cipher_decrypt(*hd, rx_buf, CHUNK_SIZE, NULL, 0);
+		err = gcry_cipher_decrypt(t->hd, rx_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
 
 		total_read += CHUNK_SIZE;
@@ -206,8 +243,7 @@ static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
 	return TRANSFER_Y;
 }
 
-static void read_from_client(gcry_cipher_hd_t *hd, int socketfd,
-			     data_head **list, uint8_t *key, uint16_t *pos)
+static void read_from_client(int socketfd, transfer_ctx *t)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -215,21 +251,21 @@ static void read_from_client(gcry_cipher_hd_t *hd, int socketfd,
 	memset(return_string, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
-	if (*list == NULL) {
+	if (t->list == NULL) {
 		read_val = read_initial_header(socketfd);
-		*list = header_parse(read_val);
+		t->list = header_parse(read_val);
 
-		*pos = datalist_get_next_active(*list, *pos);
-		if (*pos > (*list)->size)
+		t->cur = datalist_get_next_active(t->list, t->cur);
+		if (t->cur > t->list->size)
 			return; // All files are duplicates off the bat
 
-		*hd = init_cipher_context((*list)->vector, key);
+		t->hd = init_cipher_context(t->list->vector, t->key);
 	} else {
-		status = receive_file(hd, socketfd, list, *pos);
-		*pos = datalist_get_next_active(*list, *pos);
+		status = receive_file(socketfd, t);
+		t->cur = datalist_get_next_active(t->list, t->cur);
 	}
 
-	uint16_t client_sends = htons(*pos);
+	uint16_t client_sends = htons(t->cur);
 	memcpy(return_string, &client_sends, sizeof(uint16_t));
 	return_string[RETURN_SIZE - 1] = status;
 
@@ -248,25 +284,21 @@ static void read_from_client(gcry_cipher_hd_t *hd, int socketfd,
  * Handle an incoming client connection. We will ensure they have a
  * directory for files, and a valid key before receiving any files
  */
-static void handle_conn(int cfd, char *ip_port)
+static void handle_conn(int cfd, transfer_ctx *t)
 {
-	data_head *list = NULL;
-	uint16_t pos = 0;
 	uint8_t failure[RETURN_SIZE];
-	gcry_cipher_hd_t hd = NULL;
 
 	// Ensure the client has a valid key on the server
-	char *key_location = concat_paths(KEYS_DIR, ip_port);
-	uint8_t *key = read_key(key_location);
-
-	if (key == NULL) {
+	char *key_location = concat_paths(KEYS_DIR, t->client_id);
+	t->key = read_key(key_location);
+	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
 		write_all(cfd, failure, RETURN_SIZE);
 		return;
 	}
 
 	// Ensure the client has a directory for their files
-	char *client_path = concat_paths(RECV_DIR, ip_port);
+	char *client_path = concat_paths(RECV_DIR, t->client_id);
 	ensure_dir(client_path);
 
 	// Work from the clients directory to make fs work easier
@@ -276,14 +308,14 @@ static void handle_conn(int cfd, char *ip_port)
 		exit(EXIT_FAILURE);
 	}
 
-	while (list == NULL || pos <= list->size)
-		read_from_client(&hd, cfd, &list, key, &pos);
+	while (t->list == NULL || t->cur <= t->list->size)
+		read_from_client(cfd, t);
 
-	gcry_cipher_close(hd);
-	datalist_destroy(list);
+	gcry_cipher_close(t->hd);
+	datalist_destroy(t->list);
 	free(client_path);
 	free(key_location);
-	free(key);
+	free(t->key);
 	fprintf(stdout, "done reading files from client\n\n");
 }
 
@@ -321,10 +353,12 @@ static void accept_connection(int socketfd)
 		if (pid == 0) {
 			// Child process
 			close(socketfd);
-
 			ip_port = make_ip_port(&recv_addr, recv_size);
-			handle_conn(recvfd, ip_port);
+			transfer_ctx *t = new_transfer_ctx(ip_port);
 
+			handle_conn(recvfd, t);
+
+			destroy_transfer_ctx(t);
 			free(ip_port);
 			close(recvfd);
 			break;
