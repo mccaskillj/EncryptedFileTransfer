@@ -44,7 +44,8 @@ int check_hash(char *name, uint8_t *hash)
 	return TRANSFER_Y;
 }
 
-static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash, int transfer)
+static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash,
+				       int transfer)
 {
 	data_node *node = calloc(1, sizeof(data_node));
 	if (node == NULL)
@@ -68,7 +69,8 @@ static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash,
 	return node;
 }
 
-void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash, int transfer)
+void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash,
+		     int transfer)
 {
 	data_node *newNode = datalist_create_node(name, size, hash, transfer);
 	if (list->size == 0) {
@@ -189,6 +191,9 @@ uint32_t datalist_get_next_active(data_head *list, uint32_t index)
 	for (; pos != NULL && pos->transfer == TRANSFER_N;
 	     pos = pos->next, next++)
 		;
+
+	if (pos == NULL)
+		return list->size + 1;
 
 	return next;
 }
