@@ -19,7 +19,9 @@
 #define INIT_VEC_BYTES 16
 #define NAME_BYTES 255
 #define SIZE_BYTES 4
-#define HASH_BYTES 64
+
+#define HASH_ALGO GCRY_MD_SHA1
+#define HASH_BYTES 20
 
 #define RETURN_SIZE 3		  // Response from server
 #define CHUNK_SIZE (2 << 10)      // ~1.5x MTU
