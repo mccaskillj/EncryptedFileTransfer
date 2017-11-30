@@ -210,11 +210,13 @@ static int init_transfer(int serv, data_head *dh)
 	uint8_t *transfer_header = datalist_generate_payload(dh);
 	int header_len = HEADER_INIT_SIZE + (dh->size * HEADER_LINE_SIZE);
 
-	write_all(serv, transfer_header, header_len);
+	int r = write_all(serv, transfer_header, header_len);
 	free(transfer_header);
+	if (r == -1)
+		return 0;
 
 	uint8_t request[RETURN_SIZE];
-	int r = recv_all(serv, request, RETURN_SIZE);
+	r = recv_all(serv, request, RETURN_SIZE);
 	if (r == 0)
 		return 0;
 
@@ -228,14 +230,14 @@ static int init_transfer(int serv, data_head *dh)
 }
 
 /*
- * Encrypt and Write specified file to the server. Returns true if
- * the file is encrypted and written entirely, false otherwise.
+ * Encrypt and Write specified file to the server. Returns 1 if
+ * the file is encrypted and written entirely, -1 if interrupted, 0 on failure.
  */
-static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
+static int send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 {
 	FILE *f = fopen(filepath, "r");
 	if (NULL == f)
-		return false;
+		return 0;
 
 	gcry_error_t err = 0;
 	uint8_t f_buf[CHUNK_SIZE];
@@ -251,7 +253,12 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 		err = gcry_cipher_encrypt(hd, f_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
 
-		write_all(sfd, f_buf, CHUNK_SIZE);
+		int r = write_all(sfd, f_buf, CHUNK_SIZE);
+		if (r == -1) {
+			fclose(f);
+			return -1;
+		}
+
 		prg_update(pb);
 
 		if (f_len < CHUNK_SIZE)
@@ -259,7 +266,7 @@ static bool send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 	}
 
 	fclose(f);
-	return true;
+	return 1;
 }
 
 /*
@@ -372,6 +379,7 @@ static bool transfer_files(client *c)
 
 	uint8_t resp_buf[RETURN_SIZE]; // Server response after file sent
 	bool all_sent = true; // Whether all NON-duplicate were successful
+	bool interrupted = false;
 	gcry_cipher_hd_t hd = init_cipher_context(c->vector, c->key);
 	prg_bar *pb = init_prg_bar();
 
@@ -380,14 +388,22 @@ static bool transfer_files(client *c)
 		prg_reset(pb, file->size / CHUNK_SIZE, CHUNK_SIZE,
 			  basename(file->name));
 
-		bool ok = send_file(sfd, hd, file->name, pb);
-		if (!ok) {
+		int r = send_file(sfd, hd, file->name, pb);
+		if (r == 0) {
 			prg_error(pb, "sending file failed");
 			all_sent = false;
 			break;
 		}
+		if (r == -1) {
+			interrupted = true;
+			break;
+		}
 
-		recv_all(sfd, resp_buf, RETURN_SIZE);
+		r = recv_all(sfd, resp_buf, RETURN_SIZE);
+		if (r == -1) {
+			interrupted = true;
+			break;
+		}
 
 		if (!transfer_passed(resp_buf)) {
 			prg_error(pb, "server indicated the transfer failed");
@@ -400,8 +416,11 @@ static bool transfer_files(client *c)
 		file = datalist_get_index(c->transferring, requested_idx);
 	}
 
-	prg_destroy(pb);
-	log_duplicates(c);
+	prg_destroy(pb); // First to clear stdout
+
+	if (!interrupted)
+		log_duplicates(c);
+
 	gcry_cipher_close(hd);
 	close(sfd);
 	return all_sent;

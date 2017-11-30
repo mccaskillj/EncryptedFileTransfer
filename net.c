@@ -25,7 +25,7 @@
 
 #define BACKLOG 10
 
-void write_all(int dstfd, uint8_t *src, int src_len)
+int write_all(int dstfd, uint8_t *src, int src_len)
 {
 	int written = 0;
 
@@ -33,12 +33,16 @@ void write_all(int dstfd, uint8_t *src, int src_len)
 		int n = write(dstfd, src + written, src_len - written);
 		if (n < 0) {
 			if (errno == EINTR)
-				break;
+				return -1;
 			perror("write failed");
 			exit(EXIT_FAILURE);
 		}
+		if (n == 0)
+			return 0;
 		written += n;
 	}
+
+	return written;
 }
 
 int recv_all(int srcfd, uint8_t *dst, int dst_len)
@@ -49,7 +53,7 @@ int recv_all(int srcfd, uint8_t *dst, int dst_len)
 		int n = recv(srcfd, dst + total_read, dst_len - total_read, 0);
 		if (n == -1) {
 			if (errno == EINTR)
-				break;
+				return -1;
 			perror("recv failed");
 			exit(EXIT_FAILURE);
 		}
@@ -93,26 +97,12 @@ char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)
  * Set the socket to re-use the bound address, and use the given
  * timeout for reading and writing
  */
-static void set_socket_options(int sfd, struct timeval timeout)
+static void set_socket_options(int sfd)
 {
 	int value = 1;
 	int rv = setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(int));
 	if (rv == -1) {
 		perror("setsockopt reuse error");
-		exit(EXIT_FAILURE);
-	}
-
-	rv =
-	    setsockopt(sfd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-	if (rv == -1) {
-		perror("setsockopt snd error");
-		exit(EXIT_FAILURE);
-	}
-
-	rv =
-	    setsockopt(sfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-	if (rv == -1) {
-		perror("setsockopt rcv error");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -121,7 +111,6 @@ int server_socket(char *port)
 {
 	int socketfd, rv;
 	struct addrinfo hints, *results, *p;
-	struct timeval timeout;
 
 	// Clear hints and set the options for TCP
 	memset(&hints, 0, sizeof(hints));
@@ -129,10 +118,6 @@ int server_socket(char *port)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_protocol = IPPROTO_TCP;
-
-	// Set the read timeout
-	timeout.tv_sec = TIMEOUT_SEC;
-	timeout.tv_usec = TIMEOUT_USEC;
 
 	if ((rv = getaddrinfo(NULL, port, &hints, &results)) == -1) {
 		fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rv));
@@ -147,7 +132,7 @@ int server_socket(char *port)
 			continue;
 		}
 
-		set_socket_options(socketfd, timeout);
+		set_socket_options(socketfd);
 
 		rv = bind(socketfd, p->ai_addr, p->ai_addrlen);
 		if (rv == -1) {
@@ -181,10 +166,6 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 	struct sockaddr_in raddr, laddr;
 	memset(&raddr, 0, sizeof(raddr));
 	memset(&laddr, 0, sizeof(laddr));
-	struct timeval timeout;
-
-	timeout.tv_sec = TIMEOUT_SEC;
-	timeout.tv_usec = TIMEOUT_USEC;
 
 	raddr.sin_family = AF_INET;
 	raddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -214,7 +195,7 @@ int client_socket(char *svr_ip, char *svr_port, char *loc_ip, char *loc_port)
 		exit(EXIT_FAILURE);
 	}
 
-	set_socket_options(socketfd, timeout);
+	set_socket_options(socketfd);
 
 	if (NULL != loc_port) {
 		rv = bind(socketfd, (struct sockaddr *)&laddr, sizeof(laddr));
