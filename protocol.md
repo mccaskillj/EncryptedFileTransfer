@@ -10,7 +10,7 @@
 | Initialization vector | 16  |
 | File 1 name  | 255 |
 | File 1 size (bytes) | 4 |
-| File 1 hash (sha-512)  | 64  |
+| File 1 hash (sha-1)  | 20  |
 | ... | ... |
 | Repeat until n files |  |
 
@@ -52,18 +52,18 @@ rxer
 │   │
 │   │
 │   └───127.0.0.1:4500
-│   │   │   SHA512(1)
-│   │   │   .SHA512(1)
-│   │   │   SHA512(2)
-│   │   │   .SHA512(2)
+│   │   │   SHA1(1)
+│   │   │   .SHA1(1)
+│   │   │   SHA1(2)
+│   │   │   .SHA1(2)
 │   │
 │   │
 │   │
 │   └───127.0.0.1:5500
-│       │   SHA512(1)
-│       │   .SHA512(1)
-│       │   SHA512(2)
-│       │   .SHA512(2)
+│       │   SHA1(1)
+│       │   .SHA1(1)
+│       │   SHA1(2)
+│       │   .SHA1(2)
 │
 │
 │

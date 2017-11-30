@@ -103,7 +103,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 	gcry_error_t err;
 	uint8_t tmpbuf[HASH_CHUNK_SIZE];
 
-	err = gcry_md_open(&hd, GCRY_MD_SHA512, 0);
+	err = gcry_md_open(&hd, HASH_ALGO, 0);
 	if (err) {
 		gcry_strerror(err);
 		exit(EXIT_FAILURE);
@@ -135,7 +135,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 				break;
 		}
 
-		unsigned char *digest = gcry_md_read(hd, GCRY_MD_SHA512);
+		unsigned char *digest = gcry_md_read(hd, HASH_ALGO);
 		memcpy(hashes[i], digest, HASH_BYTES);
 		gcry_md_reset(hd);
 		fclose(f);

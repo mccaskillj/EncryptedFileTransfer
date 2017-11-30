@@ -160,7 +160,7 @@ static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
 	uint32_t fwrite_size = CHUNK_SIZE;
 	gcry_md_hd_t hash_hd;
 
-	err = gcry_md_open(&hash_hd, GCRY_MD_SHA512, 0);
+	err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
 	g_error(err);
 
 	while (total_read < node->size) {
@@ -180,7 +180,7 @@ static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	unsigned char *cur_digest = gcry_md_read(hash_hd, GCRY_MD_SHA512);
+	unsigned char *cur_digest = gcry_md_read(hash_hd, HASH_ALGO);
 	unsigned char *expec_digest = node->hash;
 
 	// Expected hash doesn't match the acquired hash. Return a failure
