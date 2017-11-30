@@ -129,7 +129,7 @@ static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
  * Receive the file at the given index in the list from a client,
  * and write the file and meta file to disk (clients dir space)
  */
-static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
+static uint8_t receive_file(gcry_cipher_hd_t *hd, int cfd, data_head **list,
 			    uint16_t pos)
 {
 	data_node *node = datalist_get_index(*list, pos);
@@ -153,42 +153,61 @@ static uint8_t receive_file(int cfd, data_head **list, uint8_t *key,
 		exit(EXIT_FAILURE);
 	}
 
-	uint8_t *vector = (*list)->vector;
-	gcry_cipher_hd_t hd = init_cipher_context(vector, key);
 	uint8_t rx_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
 	gcry_error_t err = 0;
 	uint32_t bytes_left = node->size;
 	uint32_t fwrite_size = CHUNK_SIZE;
+	gcry_md_hd_t hash_hd;
+
+	err = gcry_md_open(&hash_hd, GCRY_MD_SHA512, 0);
+	g_error(err);
 
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
-		err = gcry_cipher_decrypt(hd, rx_buf, CHUNK_SIZE, NULL, 0);
+		err = gcry_cipher_decrypt(*hd, rx_buf, CHUNK_SIZE, NULL, 0);
 		g_error(err);
+
 		total_read += CHUNK_SIZE;
 
 		// Last chunk is handled here
 		if (bytes_left < CHUNK_SIZE)
 			fwrite_size = bytes_left;
 
+		gcry_md_write(hash_hd, rx_buf, fwrite_size);
 		fwrite(rx_buf, 1, fwrite_size, fp);
 		bytes_left -= CHUNK_SIZE;
 	}
-	fclose(fp);
 
-	// TODO: calculate and validate the hash against expected.
-	// If the hash doesn't match, delete the temp file and don't
-	// save meta
+	unsigned char *cur_digest = gcry_md_read(hash_hd, GCRY_MD_SHA512);
+	unsigned char *expec_digest = node->hash;
+
+	// Expected hash doesn't match the acquired hash. Return a failure
+	// status
+	if (memcmp(cur_digest, expec_digest, HASH_BYTES) != 0) {
+		int rv = unlink(tmp_name);
+		if (rv == -1) {
+			perror("unlink error");
+			exit(EXIT_FAILURE);
+		}
+
+		printf("Digest mismatch: %s failed integrity check.\n",
+		       node->name);
+
+		return TRANSFER_N;
+	}
+
 	save_files(tmp_name, node->name, node->hash);
-	gcry_cipher_close(hd);
+	fclose(fp);
+	gcry_md_close(hash_hd);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
 }
 
-static void read_from_client(int socketfd, data_head **list, uint8_t *key,
-				 uint16_t *pos)
+static void read_from_client(gcry_cipher_hd_t *hd, int socketfd,
+			     data_head **list, uint8_t *key, uint16_t *pos)
 {
 	uint32_t sent_total = 0;
 	uint8_t *read_val = NULL;
@@ -200,8 +219,9 @@ static void read_from_client(int socketfd, data_head **list, uint8_t *key,
 		read_val = read_initial_header(socketfd);
 		*list = header_parse(read_val);
 		*pos = datalist_get_next_active(*list, *pos);
+		*hd = init_cipher_context((*list)->vector, key);
 	} else {
-		status = receive_file(socketfd, list, key, *pos);
+		status = receive_file(hd, socketfd, list, *pos);
 		*pos = datalist_get_next_active(*list, *pos);
 	}
 
@@ -229,7 +249,8 @@ static void handle_conn(int cfd, char *ip_port)
 	data_head *list = NULL;
 	uint16_t pos = 0;
 	uint8_t failure[RETURN_SIZE];
-	
+	gcry_cipher_hd_t hd = NULL;
+
 	struct sockaddr_storage sa_in;
 	socklen_t len = sizeof(sa_in);
 
@@ -260,8 +281,9 @@ static void handle_conn(int cfd, char *ip_port)
 	}
 
 	while (list == NULL || pos <= list->size)
-		read_from_client(cfd, &list, key, &pos);
+		read_from_client(&hd, cfd, &list, key, &pos);
 
+	gcry_cipher_close(hd);
 	datalist_destroy(list);
 	free(client_path);
 	free(key_location);
@@ -286,7 +308,7 @@ static void accept_connection(int socketfd)
 		if (recvfd == -1) {
 			if (errno == EINTR)
 				break;
-			
+
 			if (errno != EWOULDBLOCK)
 				perror("accept");
 			continue;
@@ -303,7 +325,6 @@ static void accept_connection(int socketfd)
 		if (pid == 0) {
 			// Child process
 			close(socketfd);
-
 
 			ip_port = make_ip_port(&recv_addr, recv_size);
 			handle_conn(recvfd, ip_port);
