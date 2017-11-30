@@ -354,9 +354,11 @@ static bool transfer_files(client *c)
 	int requested_idx = init_transfer(sfd, c->transferring);
 	if (requested_idx == -1) {
 		fprintf(stderr, "No AES key on server\n");
+		close(sfd);
 		return false;
 	} else if (requested_idx == 0) {
 		fprintf(stderr, "All files exist on server already\n");
+		close(sfd);
 		return true;
 	}
 
@@ -401,6 +403,7 @@ static bool transfer_files(client *c)
 	prg_destroy(pb);
 	log_duplicates(c);
 	gcry_cipher_close(hd);
+	close(sfd);
 	return all_sent;
 }
 
