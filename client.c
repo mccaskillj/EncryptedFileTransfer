@@ -102,7 +102,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 
 	gcry_md_hd_t hd;
 	gcry_error_t err;
-	uint8_t tmpbuf[HASH_CHUNK_SIZE];
+	uint8_t tmpbuf[CHUNK_SIZE];
 
 	err = gcry_md_open(&hd, HASH_ALGO, 0);
 	if (err) {
@@ -116,7 +116,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 	for (int i = 0; i < num_files; i++) {
 		spin_reset(s, basename(to_transfer[i]));
 
-		hashes[i] = malloc(HASH_BYTES);
+		hashes[i] = malloc(CHUNK_SIZE);
 		if (NULL == hashes[i])
 			mem_error();
 
@@ -128,11 +128,11 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 		}
 
 		while (!TERMINATED) {
-			int len = fread(tmpbuf, 1, HASH_CHUNK_SIZE, f);
+			int len = fread(tmpbuf, 1, CHUNK_SIZE, f);
 			gcry_md_write(hd, tmpbuf, len);
 			spin_update(s);
 
-			if (len < HASH_CHUNK_SIZE)
+			if (len < CHUNK_SIZE)
 				break;
 		}
 
