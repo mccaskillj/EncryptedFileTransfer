@@ -298,7 +298,7 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 	c->transferring = datalist_init(c->vector);
 	for (int i = 0; i < num_files; i++) {
 		datalist_append(c->transferring, files[i], sizes[i], hashes[i],
-				TRANSFER_N);
+				TRANSFER_D);
 		free(files[i]);
 		free(hashes[i]);
 	}
@@ -333,18 +333,39 @@ static void destroy_client(client *c)
 }
 
 /*
- * Log all duplicate files that were destined to be transferred
- * to the server by the given client
+ * Log transfer results for the given client. Successful transfers
+ * display the short hash (similar to short git hashes).
  */
-static void log_duplicates(client *c)
+static void log_transfer_results(client *c)
 {
 	int idx = 1;
 	data_node *n = datalist_get_index(c->transferring, idx);
 
+	if (n != NULL)
+		fprintf(stdout, "Transfer summary:\n");
+
 	while (n != NULL) {
-		if (n->transfer == TRANSFER_N)
-			fprintf(stderr, "%s already exists on server\n",
-				basename(n->name));
+		char *bname = basename(n->name);
+
+		switch (n->transfer) {
+		case TRANSFER_Y: {
+			char *hex_hash = hash_to_hex(n->hash);
+			fprintf(stdout,
+				"%s successfully transferred with fingerprint "
+				"%.*s\n",
+				bname, 8, hex_hash);
+			free(hex_hash);
+		} break;
+		case TRANSFER_N:
+			fprintf(stderr, "%s failed to transfer\n", bname);
+			break;
+		case TRANSFER_D:
+			fprintf(stdout, "%s already exists on server\n", bname);
+			break;
+		default:
+			fprintf(stderr, "unknown transfer result %d\n",
+				n->transfer);
+		}
 
 		idx += 1;
 		n = datalist_get_index(c->transferring, idx);
@@ -367,6 +388,7 @@ static bool transfer_files(client *c, int burn)
 		write_all(sfd, burn_msg, HEADER_INIT_SIZE);
 		fprintf(stderr, "No AES key on server\n");
 		fprintf(stderr, "Transferring all files failed\n");
+		close(sfd);
 		return true;
 	}
 
@@ -431,7 +453,7 @@ static bool transfer_files(client *c, int burn)
 	prg_destroy(pb); // First to clear stdout
 
 	if (!interrupted)
-		log_duplicates(c);
+		log_transfer_results(c);
 
 	gcry_cipher_close(hd);
 	close(sfd);
