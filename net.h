@@ -10,14 +10,15 @@
 #define NET_H
 
 /*
- * Write an entire source buffer to the destination socket
+ * Write an entire source buffer to the destination socket. Returns
+ * 0 when the socket is closed, -1 when interrupted
  */
-void write_all(int dstfd, uint8_t *src, int src_len);
+int write_all(int dstfd, uint8_t *src, int src_len);
 
 /*
  * Receive dst_len bytes from the source socket into destination
- * buffer. Returns 0 when the socket is closed, dst_len echoed
- * otherwise
+ * buffer. Returns 0 when the socket is closed, -1 when interrupted,
+ * dst_len echoed otherwise
  */
 int recv_all(int srcfd, uint8_t *dst, int dst_len);
 
