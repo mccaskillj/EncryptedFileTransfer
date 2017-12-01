@@ -127,9 +127,9 @@ static uint8_t *read_initial_header(int socketfd)
  * name, and contains actual file contents received. The meta file is a dotfile
  * of the hash and contains information about the file.
  */
-static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
+static void save_files(char *tmp_name, data_node *n, char *client_id)
 {
-	char *hex = hash_to_hex(hash);
+	char *hex = hash_to_hex(n->hash);
 
 	// Write the meta file
 	int hex_size = 2 * HASH_BYTES;
@@ -147,12 +147,12 @@ static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
 		exit(EXIT_FAILURE);
 	}
 
-	fwrite("filename: ", 1, 10, fp);
-	fwrite(dst_name, 1, NAME_BYTES, fp);
-	fwrite("\n", 1, 1, fp);
+	// Original filename and client ip:port written to meta file
+	fprintf(fp, "%.*s\n", NAME_BYTES, n->name);
+	fprintf(fp, "%s\n", client_id);
 	fclose(fp);
 
-	// Rename the temp file - we keep it
+	// Rename the temp file to its hash - we keep it
 	int r = rename(tmp_name, hex);
 	if (r == -1) {
 		perror("rename");
@@ -250,7 +250,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	}
 
 	// Temp file renamed to actual name and create the meta file
-	save_files(tmp_name, node->name, node->hash);
+	save_files(tmp_name, node, t->client_id);
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
 }
