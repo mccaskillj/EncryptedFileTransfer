@@ -164,31 +164,29 @@ static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
 }
 
 /*
- * Check if the hash that was obtained from the file matches what was expected.
- * The hashes don't match then remove the tmp file and return TRANSFER_N (file
- * transfer failed). Otherwise return TRANSFER_Y (file transfer successed).
+ * Returns true if the given expected hash matches the actual.
+ * If the hash is not the same, remove the given temp file.
  */
-static uint8_t hash_check(unsigned char *actual, unsigned char *expected,
-			  char *tmp)
+static bool hash_matches(uint8_t *actual, uint8_t *expected, char *tmp)
 {
-	// Expected hash doesn't match the acquired hash. Return a failure
-	// status and remove the tmp file
 	if (memcmp(actual, expected, HASH_BYTES) != 0) {
-		int rv = unlink(tmp);
-		if (rv == -1) {
-			perror("unlink error");
+		if (unlink(tmp) == -1) {
+			perror("unlink");
 			exit(EXIT_FAILURE);
 		}
 
-		return TRANSFER_N;
+		return false;
 	}
 
-	return TRANSFER_Y;
+	return true;
 }
 
 /*
- * Receive the file at the given index in the list from a client,
- * and write the file and meta file to disk (clients dir space)
+ * Receive a file at the current index of the transfer context.
+ * Incoming chunks of data for the file are hashed as they come in.
+ * Incoming data is written to a temp file until the contents are
+ * validated against the expected hash. Returns the transfer status
+ * for the given file.
  */
 static uint8_t receive_file(int cfd, transfer_ctx *t)
 {
@@ -215,12 +213,11 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 	uint8_t rx_buf[CHUNK_SIZE];
 	uint32_t total_read = 0;
-	gcry_error_t err = 0;
 	uint32_t bytes_left = node->size;
 	uint32_t fwrite_size = CHUNK_SIZE;
-	gcry_md_hd_t hash_hd;
 
-	err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
+	gcry_md_hd_t hash_hd;
+	gcry_error_t err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
 	g_error(err);
 
 	while (total_read < node->size) {
@@ -240,23 +237,20 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	unsigned char *cur_digest = gcry_md_read(hash_hd, HASH_ALGO);
-	unsigned char *expec_digest = node->hash;
-	uint8_t hc = hash_check(cur_digest, expec_digest, tmp_name);
+	fclose(fp);
 
+	// Validate the received contents
+	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
+	bool matches = hash_matches(actual_hash, node->hash, tmp_name);
 	gcry_md_close(hash_hd);
 
-	// Failure mismatch, log the failure message and return transfer failure.
-	if (hc == TRANSFER_N) {
-		printf("Digest mismatch: %s failed integrity check.\n",
-		       node->name);
-		fclose(fp);
+	if (!matches) {
+		fprintf(stderr, "%s digest mismatch\n", node->name);
 		return TRANSFER_N;
 	}
 
+	// Temp file renamed to actual name and create the meta file
 	save_files(tmp_name, node->name, node->hash);
-	fclose(fp);
-
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
 }
