@@ -164,6 +164,29 @@ static void save_files(char *tmp_name, char *dst_name, uint8_t *hash)
 }
 
 /*
+ * Check if the hash that was obtained from the file matches what was expected.
+ * The hashes don't match then remove the tmp file and return TRANSFER_N (file
+ * transfer failed). Otherwise return TRANSFER_Y (file transfer successed).
+ */
+static uint8_t hash_check(unsigned char *actual, unsigned char *expected,
+			  char *tmp)
+{
+	// Expected hash doesn't match the acquired hash. Return a failure
+	// status and remove the tmp file
+	if (memcmp(actual, expected, HASH_BYTES) != 0) {
+		int rv = unlink(tmp);
+		if (rv == -1) {
+			perror("unlink error");
+			exit(EXIT_FAILURE);
+		}
+
+		return TRANSFER_N;
+	}
+
+	return TRANSFER_Y;
+}
+
+/*
  * Receive the file at the given index in the list from a client,
  * and write the file and meta file to disk (clients dir space)
  */
@@ -219,25 +242,20 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 	unsigned char *cur_digest = gcry_md_read(hash_hd, HASH_ALGO);
 	unsigned char *expec_digest = node->hash;
+	uint8_t hc = hash_check(cur_digest, expec_digest, tmp_name);
 
-	// Expected hash doesn't match the acquired hash. Return a failure
-	// status
-	if (memcmp(cur_digest, expec_digest, HASH_BYTES) != 0) {
-		int rv = unlink(tmp_name);
-		if (rv == -1) {
-			perror("unlink error");
-			exit(EXIT_FAILURE);
-		}
+	gcry_md_close(hash_hd);
 
+	// Failure mismatch, log the failure message and return transfer failure.
+	if (hc == TRANSFER_N) {
 		printf("Digest mismatch: %s failed integrity check.\n",
 		       node->name);
-
+		fclose(fp);
 		return TRANSFER_N;
 	}
 
 	save_files(tmp_name, node->name, node->hash);
 	fclose(fp);
-	gcry_md_close(hash_hd);
 
 	fprintf(stdout, "receiving %s done\n", node->name);
 	return TRANSFER_Y;
