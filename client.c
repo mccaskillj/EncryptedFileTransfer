@@ -477,10 +477,12 @@ int main(int argc, char *argv[])
 	    new_client(r_ip, r_port, l_ip, l_port, file_paths, key_path);
 
 	int status = EXIT_SUCCESS;
-	bool ok = transfer_files(c);
-	if (!ok) {
-		status = EXIT_FAILURE;
-		fprintf(stderr, "Transferring all files failed\n");
+	if (!TERMINATED) {
+		bool ok = transfer_files(c);
+		if (!ok) {
+			status = EXIT_FAILURE;
+			fprintf(stderr, "Transferring all files failed\n");
+		}
 	}
 
 	destroy_client(c);
