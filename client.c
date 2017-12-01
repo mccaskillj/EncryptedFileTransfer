@@ -223,7 +223,7 @@ static int init_transfer(int serv, data_head *dh)
 
 	// Verify the server has clients key
 	static const uint8_t no_key[RETURN_SIZE] = {0};
-	if (memcmp(request, no_key, 3) == 3) {
+	if (memcmp(request, no_key, 3) == 0) {
 		return -1;
 	}
 
@@ -364,6 +364,7 @@ static bool transfer_files(client *c, int burn)
 		memset(burn_msg, 0, HEADER_INIT_SIZE);
 		write_all(sfd, burn_msg, HEADER_INIT_SIZE);
 		fprintf(stderr, "No AES key on server\n");
+		fprintf(stderr, "Transferring all files failed\n");
 		return true;
 	}
 
