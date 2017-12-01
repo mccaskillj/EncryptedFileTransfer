@@ -224,7 +224,7 @@ static int init_transfer(int serv, data_head *dh)
 	// Verify the server has clients key
 	static const uint8_t no_key[RETURN_SIZE] = {0};
 	if (memcmp(request, no_key, 3) == 3) {
-		return 0;
+		return -1;
 	}
 
 	return parse_next_file(request);
