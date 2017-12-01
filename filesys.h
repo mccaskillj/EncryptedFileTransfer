@@ -17,6 +17,7 @@
 #define RECV_DIR "received"
 #define HASHES_DIR "hashes"
 #define FILES_DIR "files"
+#define CWD_KEYS "../../keys"
 #define CUR_DIR "./"
 
 /*

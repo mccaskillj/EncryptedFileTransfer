@@ -77,13 +77,15 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
-static uint8_t *read_initial_header(int socketfd)
+static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 {
 	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
 	uint64_t files_info = HEADER_LINE_SIZE;
 	uint8_t *buf = NULL;
+	uint8_t burn[HEADER_INIT_SIZE];
 
+	memset(burn, 0, HEADER_INIT_SIZE);
 	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
@@ -97,6 +99,15 @@ static uint8_t *read_initial_header(int socketfd)
 			exit(EXIT_FAILURE);
 		}
 		total_read += n;
+	}
+
+	if (memcmp(initial_read, burn, HEADER_INIT_SIZE) == 0) {
+		char *key_path = concat_paths(CWD_KEYS, t->client_id);
+		fprintf(stderr, "read full transfer header\n");
+		fprintf(stderr, "burn initiated...client key eliminated\n");
+		remove(key_path);
+		free(key_path);
+		return NULL;
 	}
 
 	uint16_t raw_file_cnt;
@@ -264,8 +275,13 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
-		read_val = read_initial_header(socketfd);
+		read_val = read_initial_header(socketfd, t);
+		if (read_val == NULL) {
+			t->cur = t->list->size + 1;
+			return;
+		}
 		t->list = header_parse(read_val);
+		free(read_val);
 
 		t->cur = datalist_get_next_active(t->list, t->cur);
 		if (t->cur > t->list->size)
