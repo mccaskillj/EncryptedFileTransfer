@@ -21,15 +21,20 @@ static void sigint_handler() { TERMINATED = 1; }
 
 void init_sig_handler()
 {
-	struct sigaction sigint;
+	struct sigaction sigint, sigchld;
 	memset(&sigint, '\0', sizeof(sigint));
+	memset(&sigchld, '\0', sizeof(sigchld));
 
-	// Clearing SA_RESTART allows interruption of all system calls
+	// Cleanup children immediately
+	sigchld.sa_handler = SIG_IGN;
+
+	// Allow interruption of all system calls
 	sigint.sa_flags &= ~SA_RESTART;
 	sigint.sa_handler = sigint_handler;
 
 	TERMINATED = 0;
 	sigaction(SIGINT, &sigint, NULL);
+	sigaction(SIGCHLD, &sigchld, NULL);
 }
 
 void g_error(gcry_error_t err)
