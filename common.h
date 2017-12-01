@@ -24,8 +24,7 @@
 #define HASH_BYTES 20
 
 #define RETURN_SIZE 3		  // Response from server
-#define CHUNK_SIZE (2 << 10)      // ~1.5x MTU
-#define HASH_CHUNK_SIZE (2 << 14) // 2^14 for better large file performance
+#define CHUNK_SIZE (2 << 14)      //  ~32 KB for better large file performance
 
 #define HEADER_INIT_SIZE (FILES_BYTES + INIT_VEC_BYTES)
 #define HEADER_LINE_SIZE (NAME_BYTES + SIZE_BYTES + HASH_BYTES)
@@ -35,9 +34,6 @@
 
 #define AES_BLOCKSIZE 16 // bytes - 128 bits
 #define KEY_SIZE 32      // bytes - 256 bits
-
-#define TIMEOUT_SEC 1
-#define TIMEOUT_USEC 0
 
 extern sig_atomic_t TERMINATED;
 
