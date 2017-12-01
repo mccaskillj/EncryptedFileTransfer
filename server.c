@@ -36,6 +36,7 @@ typedef struct {
 	uint16_t cur;    // Index of current file
 	char *client_id; // ip:port
 	uint8_t *key;
+	int burn;
 } transfer_ctx;
 
 /*
@@ -52,6 +53,7 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
 	t->list = NULL;
 	t->hd = NULL;
 	t->key = NULL;
+	t->burn = NO_BURN;
 	return t;
 }
 
@@ -60,6 +62,7 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
  */
 static void destroy_transfer_ctx(transfer_ctx *t)
 {
+	free(t->client_id);
 	free(t);
 	t = NULL;
 }
@@ -107,6 +110,7 @@ static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 		fprintf(stderr, "burn initiated...client key eliminated\n");
 		remove(key_path);
 		free(key_path);
+		t->burn = BURN;
 		return NULL;
 	}
 
@@ -277,6 +281,9 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	if (t->list == NULL) {
 		read_val = read_initial_header(socketfd, t);
 		if (read_val == NULL) {
+			uint8_t empty[INIT_VEC_BYTES];
+			memset(empty, 0, INIT_VEC_BYTES);
+			t->list = datalist_init(empty);
 			t->cur = t->list->size + 1;
 			return;
 		}
@@ -322,6 +329,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
 		write_all(cfd, failure, RETURN_SIZE);
+		free(key_location);
 		return;
 	}
 
@@ -344,7 +352,8 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(client_path);
 	free(key_location);
 	free(t->key);
-	fprintf(stdout, "done reading files from client\n\n");
+	if (t->burn == NO_BURN)
+		fprintf(stdout, "done reading files from client\n\n");
 }
 
 static void accept_connection(int socketfd)
@@ -387,7 +396,7 @@ static void accept_connection(int socketfd)
 			handle_conn(recvfd, t);
 
 			destroy_transfer_ctx(t);
-			free(ip_port);
+			//free(ip_port);
 			close(recvfd);
 			return;
 		} else {

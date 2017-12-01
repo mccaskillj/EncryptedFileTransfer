@@ -28,8 +28,11 @@ static int check_duplicate(uint8_t *hash)
 			if (directory->d_name[0] != '.') {
 				hex_hash = hash_to_hex(hash);
 				if (memcmp(directory->d_name, hex_hash, HASH_BYTES * 2) == 0){
+					free(hex_hash);
+					closedir(d);
 					return TRANSFER_N;
 				}
+				free(hex_hash);
 			}
 			directory = readdir(d);
 		}
