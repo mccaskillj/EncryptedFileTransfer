@@ -361,7 +361,7 @@ static void accept_connection(int socketfd)
 			destroy_transfer_ctx(t);
 			free(ip_port);
 			close(recvfd);
-			break;
+			return;
 		} else {
 			// Parent process; loop back to accept more connections
 			close(recvfd);
