@@ -116,7 +116,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 	for (int i = 0; i < num_files; i++) {
 		spin_reset(s, basename(to_transfer[i]));
 
-		hashes[i] = malloc(CHUNK_SIZE);
+		hashes[i] = malloc(HASH_BYTES);
 		if (NULL == hashes[i])
 			mem_error();
 
