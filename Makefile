@@ -16,11 +16,11 @@ txer: client.o parser.o datalist.o common.o filesys.o net.o ui.o
 rxer: server.o parser.o datalist.o common.o filesys.o net.o ui.o
 	$(CC) $^ -o $@  `libgcrypt-config --cflags --libs`
 
-server.o: server.c common.h net.h datalist.h filesys.h
+server.o: server.c common.h net.h datalist.h filesys.h parser.h
 
-client.o: client.c common.h ui.h net.h datalist.h filesys.h
+client.o: client.c common.h ui.h net.h datalist.h filesys.h parser.h
 
-datalist.o: datalist.c common.h
+datalist.o: datalist.c datalist.h common.h
 
 parser.o: parser.c datalist.h common.h
 
