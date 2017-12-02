@@ -29,8 +29,9 @@
 #define HEADER_INIT_SIZE (FILES_BYTES + INIT_VEC_BYTES)
 #define HEADER_LINE_SIZE (NAME_BYTES + SIZE_BYTES + HASH_BYTES)
 
-#define TRANSFER_Y 1
-#define TRANSFER_N 0
+#define TRANSFER_D 2 // Duplicate
+#define TRANSFER_Y 1 // Successful
+#define TRANSFER_N 0 // Unsuccessful
 
 #define AES_BLOCKSIZE 16 // bytes - 128 bits
 #define KEY_SIZE 32      // bytes - 256 bits
