@@ -87,8 +87,6 @@ static uint8_t *read_initial_header(int socketfd)
 	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
-	fprintf(stdout, "reading initial transfer header bytes\n");
-
 	while (header_size - total_read > 0) {
 		int n = recv(socketfd, initial_read + total_read,
 			     header_size - total_read, 0);
@@ -118,7 +116,6 @@ static uint8_t *read_initial_header(int socketfd)
 		total_read += n;
 	}
 
-	fprintf(stdout, "read full transfer header\n");
 	return buf;
 }
 
@@ -195,7 +192,6 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		fprintf(stderr, "no file to save at idx %d\n", t->cur);
 		exit(EXIT_FAILURE);
 	}
-	fprintf(stderr, "receiving %s...\n", node->name);
 
 	// Read into a temp file because the hash isn't validated
 	char tmp_name[] = "incoming-XXXXXX";
@@ -220,6 +216,8 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	gcry_error_t err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
 	g_error(err);
 
+	printf("Receiving %s's file: %s...\n", t->client_id, node->name);
+
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
@@ -237,7 +235,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	fclose(fp);
+	printf("Checking %s's file: %s...\n", t->client_id, node->name);
 
 	// Validate the received contents
 	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
@@ -245,13 +243,26 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	gcry_md_close(hash_hd);
 
 	if (!matches) {
-		fprintf(stderr, "%s digest mismatch\n", node->name);
+		fprintf(stderr,
+			"%s's file, %s failed integrity check.\nConnection "
+			"terminated.\n",
+			t->client_id, node->name);
 		return TRANSFER_N;
 	}
 
+	printf("%s's file %s matches as expected.\n", t->client_id, node->name);
+	printf("Saving %s's file: %s...\n", t->client_id, node->name);
+
+	// Moved this here because pause at the end happens here so
+	// logging before this to let the user know that it's saving
+	// the file. If you guys have a better idea then let me know.
+	fclose(fp);
+
 	// Temp file renamed to actual name and create the meta file
 	save_files(tmp_name, node, t->client_id);
-	fprintf(stdout, "receiving %s done\n", node->name);
+	printf("%s's file %s successfully transfered!\n\n", t->client_id,
+	       node->name);
+
 	return TRANSFER_Y;
 }
 
@@ -264,13 +275,20 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
+		printf("Validating %s's transfer request...\n", t->client_id);
 		read_val = read_initial_header(socketfd);
 		t->list = header_parse(read_val);
 
 		t->cur = datalist_get_next_active(t->list, t->cur);
-		if (t->cur > t->list->size)
+		if (t->cur > t->list->size) {
+			fprintf(stdout,
+				"Client %s, all files exist. Transfer request "
+				"denied.\n",
+				t->client_id);
 			return; // All files are duplicates off the bat
+		}
 
+		printf("%s's transfer request accepted\n", t->client_id);
 		t->hd = init_cipher_context(t->list->vector, t->key);
 	} else {
 		status = receive_file(socketfd, t);
@@ -302,6 +320,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 
 	// Ensure the client has a valid key on the server
 	char *key_location = concat_paths(KEYS_DIR, t->client_id);
+
 	t->key = read_key(key_location);
 	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
@@ -328,7 +347,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(client_path);
 	free(key_location);
 	free(t->key);
-	fprintf(stdout, "done reading files from client\n\n");
+	fprintf(stdout, "%s's file(s) transfer complete.\n\n", t->client_id);
 }
 
 static void accept_connection(int socketfd)
