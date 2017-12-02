@@ -52,15 +52,6 @@ void mem_error(void)
 	exit(EXIT_FAILURE);
 }
 
-int padding_aes(int raw_size)
-{
-	if (raw_size % AES_BLOCKSIZE == 0)
-		return 0;
-
-	int padded = raw_size + AES_BLOCKSIZE - (raw_size % AES_BLOCKSIZE);
-	return padded - raw_size;
-}
-
 void init_gcrypt()
 {
 	if (!gcry_check_version(GCRYPT_VERSION)) {

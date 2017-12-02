@@ -69,12 +69,6 @@ void init_gcrypt();
 gcry_cipher_hd_t init_cipher_context(uint8_t *vector, uint8_t *key);
 
 /*
- * Return the number of padding bytes needed for a raw size to fit
- * into the AES block size
- */
-int padding_aes(int raw_size);
-
-/*
  * Parse the ip address from the given string with an optional ip and
  * required port in the format ip:port
  */
