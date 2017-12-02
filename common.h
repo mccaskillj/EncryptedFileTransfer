@@ -42,7 +42,7 @@
 extern sig_atomic_t TERMINATED;
 
 /*
- * Initialize the signal handler for SIGINT
+ * Initialize the signal handler for SIGINT and SIGCHLD
  */
 void init_sig_handler();
 
@@ -92,4 +92,4 @@ char *parse_port(char *ip_port);
  */
 char *hash_to_hex(uint8_t *hash);
 
-#endif
+#endif /* COMMON_H */
