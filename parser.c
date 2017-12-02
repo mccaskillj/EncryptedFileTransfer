@@ -1,14 +1,26 @@
+/*
+ *  Group 3
+ *  Assignment #3 - Secure File Transfer
+ *  CMPT361 F17
+ *
+ *  Purpose: Functions that take byte payloads and turn
+ *  them into list-related structures
+ */
+
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "common.h"
 #include "datalist.h"
 #include "filesys.h"
 #include "parser.h"
 
+/*
+ * Ensure that the given hash does not exist in the current directory.
+ * This function should be called while already in a given clients
+ * working directory
+ */
 static int check_duplicate(uint8_t *hash)
 {
 	DIR *d;
@@ -43,6 +55,10 @@ static int check_duplicate(uint8_t *hash)
 	return TRANSFER_Y;
 }
 
+/*
+ * Add a list node to the given list, interpreted from the given
+ * file data bytes containing the files name, size, and hash
+ */
 static void header_add_node(data_head *list, uint8_t *file_data)
 {
 	char *name = (char *)file_data;

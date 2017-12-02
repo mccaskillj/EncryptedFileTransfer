@@ -45,4 +45,4 @@ uint32_t filesize(char *path);
  */
 char *concat_paths(char *s1, char *s2);
 
-#endif
+#endif /* FILESYS_H */
