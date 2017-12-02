@@ -223,7 +223,7 @@ static int init_transfer(int serv, data_head *dh)
 
 	// Verify the server has clients key
 	static const uint8_t no_key[RETURN_SIZE] = {0};
-	if (memcmp(request, no_key, 3) == 3) {
+	if (memcmp(request, no_key, 3) == 0) {
 		return -1;
 	}
 
@@ -356,10 +356,19 @@ static void log_duplicates(client *c)
  * configuration. Returns true on successful transfer of all
  * non-duplicate files, false otherwise.
  */
-static bool transfer_files(client *c)
+static bool transfer_files(client *c, int burn)
 {
 	fprintf(stdout, "Connecting to server...\n");
 	int sfd = client_socket(c->r_ip, c->r_port, c->l_ip, c->l_port);
+
+	if (burn == BURN) {
+		uint8_t burn_msg[HEADER_INIT_SIZE];
+		memset(burn_msg, 0, HEADER_INIT_SIZE);
+		write_all(sfd, burn_msg, HEADER_INIT_SIZE);
+		fprintf(stderr, "No AES key on server\n");
+		fprintf(stderr, "Transferring all files failed\n");
+		return true;
+	}
 
 	int requested_idx = init_transfer(sfd, c->transferring);
 	if (requested_idx == -1) {
@@ -432,12 +441,13 @@ static bool transfer_files(client *c)
 int main(int argc, char *argv[])
 {
 	int opt = 0;
+	int burn = NO_BURN;
 	char *l_port = NULL, *l_ip = NULL;
 	char *r_port = NULL, *r_ip = NULL;
 	char *key_path = NULL, *file_paths = NULL;
 	init_sig_handler();
 
-	while ((opt = getopt(argc, argv, "l:r:k:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:k:f:hb")) != -1) {
 		switch (opt) {
 		case 'r':
 			r_ip = parse_ip(optarg);
@@ -452,6 +462,10 @@ int main(int argc, char *argv[])
 			break;
 		case 'f':
 			file_paths = strdup(optarg);
+			break;
+		case 'b':
+			// Top secret, so this isn't in the usage message
+            burn = BURN;
 			break;
 		case 'h':
 			usage(argv[0], EXIT_SUCCESS);
@@ -480,7 +494,7 @@ int main(int argc, char *argv[])
 
 	int status = EXIT_SUCCESS;
 	if (!TERMINATED) {
-		bool ok = transfer_files(c);
+		bool ok = transfer_files(c, burn);
 		if (!ok) {
 			status = EXIT_FAILURE;
 			fprintf(stderr, "Transferring all files failed\n");

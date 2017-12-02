@@ -36,7 +36,10 @@ typedef struct {
 	uint16_t cur;    // Index of current file
 	char *client_id; // ip:port
 	uint8_t *key;
+	int burn;
 } transfer_ctx;
+
+static const uint8_t burn[HEADER_INIT_SIZE]; // Burn detection
 
 /*
  * Create a new transfer context for the client ip:port
@@ -52,6 +55,7 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
 	t->list = NULL;
 	t->hd = NULL;
 	t->key = NULL;
+	t->burn = NO_BURN;
 	return t;
 }
 
@@ -60,6 +64,7 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
  */
 static void destroy_transfer_ctx(transfer_ctx *t)
 {
+	free(t->client_id);
 	free(t);
 	t = NULL;
 }
@@ -77,7 +82,7 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
-static uint8_t *read_initial_header(int socketfd)
+static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 {
 	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
@@ -97,6 +102,19 @@ static uint8_t *read_initial_header(int socketfd)
 			exit(EXIT_FAILURE);
 		}
 		total_read += n;
+	}
+
+	// Remove the clients key when they send an empty header
+	if (memcmp(initial_read, burn, HEADER_INIT_SIZE) == 0) {
+		char *key_path = concat_paths(CWD_KEYS, t->client_id);
+		fprintf(stdout, "burn initiated...client key eliminated\n");
+		int r = remove(key_path);
+		if (r == -1)
+			perror("remove burn");
+
+		free(key_path);
+		t->burn = BURN;
+		return NULL;
 	}
 
 	uint16_t raw_file_cnt;
@@ -258,14 +276,22 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 static void read_from_client(int socketfd, transfer_ctx *t)
 {
 	uint32_t sent_total = 0;
-	uint8_t *read_val = NULL;
-	char return_string[RETURN_SIZE];
-	memset(return_string, 0, RETURN_SIZE);
+	char response[RETURN_SIZE];
+	memset(response, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
-		read_val = read_initial_header(socketfd);
-		t->list = header_parse(read_val);
+		uint8_t *header = read_initial_header(socketfd, t);
+
+		// Client wants to burn their key
+		if (header == NULL) {
+			t->list = datalist_init(NULL);
+			t->cur = t->list->size + 1;
+			return;
+		}
+
+		t->list = header_parse(header);
+		free(header);
 
 		t->cur = datalist_get_next_active(t->list, t->cur);
 		if (t->cur > t->list->size)
@@ -278,11 +304,11 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	}
 
 	uint16_t client_sends = htons(t->cur);
-	memcpy(return_string, &client_sends, sizeof(uint16_t));
-	return_string[RETURN_SIZE - 1] = status;
+	memcpy(response, &client_sends, sizeof(uint16_t));
+	response[RETURN_SIZE - 1] = status;
 
 	while (RETURN_SIZE - sent_total != 0) {
-		int n = send(socketfd, &return_string[sent_total],
+		int n = send(socketfd, &response[sent_total],
 			     RETURN_SIZE - sent_total, 0);
 		if (n == -1) {
 			perror("send");
@@ -306,6 +332,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
 		write_all(cfd, failure, RETURN_SIZE);
+		free(key_location);
 		return;
 	}
 
@@ -328,7 +355,8 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(client_path);
 	free(key_location);
 	free(t->key);
-	fprintf(stdout, "done reading files from client\n\n");
+	if (t->burn == NO_BURN)
+		fprintf(stdout, "done reading files from client\n\n");
 }
 
 static void accept_connection(int socketfd)
@@ -371,7 +399,6 @@ static void accept_connection(int socketfd)
 			handle_conn(recvfd, t);
 
 			destroy_transfer_ctx(t);
-			free(ip_port);
 			close(recvfd);
 			return;
 		} else {

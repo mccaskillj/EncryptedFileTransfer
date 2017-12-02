@@ -24,9 +24,12 @@ data_head *datalist_init(uint8_t *vector)
 	if (list == NULL)
 		mem_error();
 
-	list->vector = calloc(INIT_VEC_BYTES, 1);
-	if (list->vector == NULL)
-		mem_error();
+	list->vector = NULL;
+	if (vector != NULL) {
+		list->vector = calloc(INIT_VEC_BYTES, 1);
+		if (NULL == list->vector)
+			mem_error();
+	}
 
 	memcpy(list->vector, vector, INIT_VEC_BYTES);
 	list->first = NULL;
