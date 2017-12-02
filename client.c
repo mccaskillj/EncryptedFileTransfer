@@ -462,7 +462,8 @@ int main(int argc, char *argv[])
 			file_paths = strdup(optarg);
 			break;
 		case 'b':
-			burn = BURN;
+			// Top secret, so this isn't in the usage message
+            burn = BURN;
 			break;
 		case 'h':
 			usage(argv[0], EXIT_SUCCESS);

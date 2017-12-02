@@ -1,13 +1,13 @@
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
 
 #include "common.h"
 #include "datalist.h"
-#include "parser.h"
 #include "filesys.h"
+#include "parser.h"
 
 static int check_duplicate(uint8_t *hash)
 {
@@ -27,7 +27,8 @@ static int check_duplicate(uint8_t *hash)
 		while (directory != NULL) {
 			if (directory->d_name[0] != '.') {
 				hex_hash = hash_to_hex(hash);
-				if (memcmp(directory->d_name, hex_hash, HASH_BYTES * 2) == 0){
+				if (memcmp(directory->d_name, hex_hash,
+					   HASH_BYTES * 2) == 0) {
 					free(hex_hash);
 					closedir(d);
 					return TRANSFER_N;
