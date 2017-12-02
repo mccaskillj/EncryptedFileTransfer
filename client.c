@@ -246,8 +246,10 @@ static int send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 	// Read a chunk from the file, encrypt, and write to server
 	while (!TERMINATED) {
 		int f_len = fread(f_buf, 1, CHUNK_SIZE, f);
+		if (f_len == 0)
+			break;
 
-		// Remaining bytes in file buf are set to random garbage
+		// Any remaining bytes in file buf are set to random garbage
 		gcry_randomize(f_buf + f_len, CHUNK_SIZE - f_len,
 			       GCRY_STRONG_RANDOM);
 

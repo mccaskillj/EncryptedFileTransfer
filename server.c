@@ -239,7 +239,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 	fclose(fp);
 
-	// Validate the received contents
+	//  Validate the received contents
 	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
 	bool matches = hash_matches(actual_hash, node->hash, tmp_name);
 	gcry_md_close(hash_hd);
