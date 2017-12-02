@@ -39,8 +39,6 @@ typedef struct {
 	int burn;
 } transfer_ctx;
 
-static const uint8_t burn[HEADER_INIT_SIZE]; // Burn detection
-
 /*
  * Create a new transfer context for the client ip:port
  */
@@ -84,25 +82,16 @@ static void usage(char *bin_path, int exit_status)
 
 static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 {
-	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
 	uint64_t files_info = HEADER_LINE_SIZE;
 	uint8_t *buf = NULL;
 
+	static const uint8_t burn[HEADER_INIT_SIZE] = {0}; // Burn detection
 	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
 	fprintf(stdout, "reading initial transfer header bytes\n");
-
-	while (header_size - total_read > 0) {
-		int n = recv(socketfd, initial_read + total_read,
-			     header_size - total_read, 0);
-		if (n == -1) {
-			perror("recv");
-			exit(EXIT_FAILURE);
-		}
-		total_read += n;
-	}
+	recv_all(socketfd, initial_read, header_size);
 
 	// Remove the clients key when they send an empty header
 	if (memcmp(initial_read, burn, HEADER_INIT_SIZE) == 0) {
@@ -124,18 +113,9 @@ static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 	buf = calloc(header_size + files_info, 1);
 	if (buf == NULL)
 		mem_error();
+
 	memcpy(buf, initial_read, header_size);
-
-	while (files_info - total_read > 0) {
-		int n = recv(socketfd, buf + total_read,
-			     files_info - total_read, 0);
-		if (n == -1) {
-			perror("recv");
-			exit(EXIT_FAILURE);
-		}
-		total_read += n;
-	}
-
+	recv_all(socketfd, buf + header_size, files_info - header_size);
 	fprintf(stdout, "read full transfer header\n");
 	return buf;
 }
@@ -275,8 +255,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 static void read_from_client(int socketfd, transfer_ctx *t)
 {
-	uint32_t sent_total = 0;
-	char response[RETURN_SIZE];
+	uint8_t response[RETURN_SIZE];
 	memset(response, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
@@ -307,15 +286,7 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	memcpy(response, &client_sends, sizeof(uint16_t));
 	response[RETURN_SIZE - 1] = status;
 
-	while (RETURN_SIZE - sent_total != 0) {
-		int n = send(socketfd, &response[sent_total],
-			     RETURN_SIZE - sent_total, 0);
-		if (n == -1) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-		sent_total += n;
-	}
+	write_all(socketfd, response, RETURN_SIZE);
 }
 
 /*
