@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'b':
 			// Top secret, so this isn't in the usage message
-            burn = BURN;
+			burn = BURN;
 			break;
 		case 'h':
 			usage(argv[0], EXIT_SUCCESS);
