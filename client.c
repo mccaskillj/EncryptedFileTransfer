@@ -101,14 +101,10 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 		mem_error();
 
 	gcry_md_hd_t hd;
-	gcry_error_t err;
 	uint8_t tmpbuf[CHUNK_SIZE];
 
-	err = gcry_md_open(&hd, HASH_ALGO, 0);
-	if (err) {
-		gcry_strerror(err);
-		exit(EXIT_FAILURE);
-	}
+	gcry_error_t err = gcry_md_open(&hd, HASH_ALGO, 0);
+	g_error(err);
 
 	spinner *s = init_spinner("Hashing");
 
@@ -136,7 +132,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 				break;
 		}
 
-		unsigned char *digest = gcry_md_read(hd, HASH_ALGO);
+		uint8_t *digest = gcry_md_read(hd, HASH_ALGO);
 		memcpy(hashes[i], digest, HASH_BYTES);
 		gcry_md_reset(hd);
 		fclose(f);
@@ -293,10 +289,31 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 		mem_error();
 	gcry_create_nonce(c->vector, INIT_VEC_BYTES);
 
+	c->transferring = datalist_init(c->vector);
 	uint8_t **hashes = generate_hashes(files, num_files);
 
-	c->transferring = datalist_init(c->vector);
+	// Create the list based on what the client wants to send to the
+	// server
 	for (int i = 0; i < num_files; i++) {
+		// Don't add files to the list that have the same hash. We will
+		// skip all files with the same hash except the last
+		int j = i + 1;
+		bool duplicate = false;
+		while (j < num_files) {
+			if (memcmp(hashes[i], hashes[j], HASH_BYTES) != 0) {
+				j++;
+				continue;
+			}
+
+			fprintf(stderr, "skipping %s: duplicate hash found\n",
+				basename(files[i]));
+			duplicate = true;
+			break;
+		}
+
+		if (duplicate)
+			continue;
+
 		datalist_append(c->transferring, files[i], sizes[i], hashes[i],
 				TRANSFER_D);
 		free(files[i]);
