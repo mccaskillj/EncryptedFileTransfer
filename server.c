@@ -66,6 +66,9 @@ static void destroy_transfer_ctx(transfer_ctx *t)
 	t = NULL;
 }
 
+/*
+ * Display a usage message and exit with the given status
+ */
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -79,6 +82,10 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
+/*
+ * Read the initial transfer header from the given socket
+ * using the given transfer context
+ */
 static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 {
 	uint32_t header_size = HEADER_INIT_SIZE;
@@ -252,6 +259,10 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	return TRANSFER_Y;
 }
 
+/*
+ * Read either the initial transfer header or a file to disk
+ * depending on the given context.
+ */
 static void read_from_client(int socketfd, transfer_ctx *t)
 {
 	uint8_t response[RETURN_SIZE];
@@ -329,6 +340,9 @@ static void handle_conn(int cfd, transfer_ctx *t)
 		fprintf(stdout, "done reading files from client\n\n");
 }
 
+/*
+ * Continually accept incoming connections until interrupted
+ */
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
