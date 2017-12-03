@@ -10,8 +10,8 @@
 #define COMMON_H
 
 #include <gcrypt.h>
-#include <stdint.h>
 #include <signal.h>
+#include <stdint.h>
 
 #define DEFAULT_SERVER_PORT "6060"
 
@@ -23,22 +23,26 @@
 #define HASH_ALGO GCRY_MD_SHA1
 #define HASH_BYTES 20
 
-#define RETURN_SIZE 3		  // Response from server
-#define CHUNK_SIZE (2 << 14)      //  ~32 KB for better large file performance
+#define RETURN_SIZE 3	// Response from server
+#define CHUNK_SIZE (2 << 14) //  ~32 KB for better large file performance
 
 #define HEADER_INIT_SIZE (FILES_BYTES + INIT_VEC_BYTES)
 #define HEADER_LINE_SIZE (NAME_BYTES + SIZE_BYTES + HASH_BYTES)
 
-#define TRANSFER_Y 1
-#define TRANSFER_N 0
+#define TRANSFER_D 2 // Duplicate
+#define TRANSFER_Y 1 // Successful
+#define TRANSFER_N 0 // Unsuccessful
 
 #define AES_BLOCKSIZE 16 // bytes - 128 bits
 #define KEY_SIZE 32      // bytes - 256 bits
 
+#define BURN 1
+#define NO_BURN 0
+
 extern sig_atomic_t TERMINATED;
 
 /*
- * Initialize the signal handler for SIGINT
+ * Initialize the signal handler for SIGINT and SIGCHLD
  */
 void init_sig_handler();
 
@@ -65,12 +69,6 @@ void init_gcrypt();
 gcry_cipher_hd_t init_cipher_context(uint8_t *vector, uint8_t *key);
 
 /*
- * Return the number of padding bytes needed for a raw size to fit
- * into the AES block size
- */
-int padding_aes(int raw_size);
-
-/*
  * Parse the ip address from the given string with an optional ip and
  * required port in the format ip:port
  */
@@ -88,4 +86,4 @@ char *parse_port(char *ip_port);
  */
 char *hash_to_hex(uint8_t *hash);
 
-#endif
+#endif /* COMMON_H */

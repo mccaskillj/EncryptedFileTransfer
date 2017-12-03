@@ -17,6 +17,7 @@
 #define RECV_DIR "received"
 #define HASHES_DIR "hashes"
 #define FILES_DIR "files"
+#define CWD_KEYS "../../keys"
 #define CUR_DIR "./"
 
 /*
@@ -44,4 +45,4 @@ uint32_t filesize(char *path);
  */
 char *concat_paths(char *s1, char *s2);
 
-#endif
+#endif /* FILESYS_H */

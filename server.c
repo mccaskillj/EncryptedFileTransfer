@@ -15,7 +15,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -36,6 +35,7 @@ typedef struct {
 	uint16_t cur;    // Index of current file
 	char *client_id; // ip:port
 	uint8_t *key;
+	int burn;
 } transfer_ctx;
 
 /*
@@ -52,6 +52,7 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
 	t->list = NULL;
 	t->hd = NULL;
 	t->key = NULL;
+	t->burn = NO_BURN;
 	return t;
 }
 
@@ -60,10 +61,14 @@ static transfer_ctx *new_transfer_ctx(char *client_id)
  */
 static void destroy_transfer_ctx(transfer_ctx *t)
 {
+	free(t->client_id);
 	free(t);
 	t = NULL;
 }
 
+/*
+ * Display a usage message and exit with the given status
+ */
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -77,24 +82,33 @@ static void usage(char *bin_path, int exit_status)
 	exit(exit_status);
 }
 
-static uint8_t *read_initial_header(int socketfd)
+/*
+ * Read the initial transfer header from the given socket
+ * using the given transfer context
+ */
+static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 {
-	uint64_t total_read = 0;
 	uint32_t header_size = HEADER_INIT_SIZE;
 	uint64_t files_info = HEADER_LINE_SIZE;
 	uint8_t *buf = NULL;
 
+	static const uint8_t burn[HEADER_INIT_SIZE] = {0}; // Burn detection
 	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
-	while (header_size - total_read > 0) {
-		int n = recv(socketfd, initial_read + total_read,
-			     header_size - total_read, 0);
-		if (n == -1) {
-			perror("recv");
-			exit(EXIT_FAILURE);
-		}
-		total_read += n;
+	recv_all(socketfd, initial_read, header_size);
+
+	// Remove the clients key when they send an empty header
+	if (memcmp(initial_read, burn, HEADER_INIT_SIZE) == 0) {
+		char *key_path = concat_paths(CWD_KEYS, t->client_id);
+		fprintf(stdout, "Burn initiated...client key eliminated\n");
+		int r = remove(key_path);
+		if (r == -1)
+			perror("remove burn");
+
+		free(key_path);
+		t->burn = BURN;
+		return NULL;
 	}
 
 	uint16_t raw_file_cnt;
@@ -104,17 +118,9 @@ static uint8_t *read_initial_header(int socketfd)
 	buf = calloc(header_size + files_info, 1);
 	if (buf == NULL)
 		mem_error();
-	memcpy(buf, initial_read, header_size);
 
-	while (files_info - total_read > 0) {
-		int n = recv(socketfd, buf + total_read,
-			     files_info - total_read, 0);
-		if (n == -1) {
-			perror("recv");
-			exit(EXIT_FAILURE);
-		}
-		total_read += n;
-	}
+	memcpy(buf, initial_read, header_size);
+	recv_all(socketfd, buf + header_size, files_info - header_size);
 
 	return buf;
 }
@@ -237,21 +243,21 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 	printf("Checking %s's file: %s...\n", t->client_id, node->name);
 
-	// Validate the received contents
+	//  Validate the received contents
 	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
 	bool matches = hash_matches(actual_hash, node->hash, tmp_name);
 	gcry_md_close(hash_hd);
 
 	if (!matches) {
 		fprintf(stderr,
-			"%s's file, %s failed integrity check.\nConnection "
-			"terminated.\n",
+			"%s's file, %s failed integrity check\nConnection "
+			"terminated\n",
 			t->client_id, node->name);
 		return TRANSFER_N;
 	}
 
-	printf("%s's file %s matches as expected.\n", t->client_id, node->name);
-	printf("Saving %s's file: %s...\n", t->client_id, node->name);
+	fprintf(stdout, "%s's file %s matches as expected\n", t->client_id, node->name);
+	fprintf(stdout, "Saving %s's file: %s...\n", t->client_id, node->name);
 
 	// Moved this here because pause at the end happens here so
 	// logging before this to let the user know that it's saving
@@ -260,35 +266,47 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 
 	// Temp file renamed to actual name and create the meta file
 	save_files(tmp_name, node, t->client_id);
-	printf("%s's file %s successfully transfered!\n\n", t->client_id,
+	fprintf(stdout, "%s's file %s successfully transfered!\n", t->client_id,
 	       node->name);
 
 	return TRANSFER_Y;
 }
 
+/*
+ * Read either the initial transfer header or a file to disk
+ * depending on the given context.
+ */
 static void read_from_client(int socketfd, transfer_ctx *t)
 {
-	uint32_t sent_total = 0;
-	uint8_t *read_val = NULL;
-	char return_string[RETURN_SIZE];
-	memset(return_string, 0, RETURN_SIZE);
+	uint8_t response[RETURN_SIZE];
+	memset(response, 0, RETURN_SIZE);
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
-		printf("Validating %s's transfer request...\n", t->client_id);
-		read_val = read_initial_header(socketfd);
-		t->list = header_parse(read_val);
+
+		fprintf(stdout, "Validating %s's transfer request...\n", t->client_id);
+		uint8_t *header = read_initial_header(socketfd, t);
+
+		// Client wants to burn their key
+		if (header == NULL) {
+			t->list = datalist_init(NULL);
+			t->cur = t->list->size + 1;
+			return;
+		}
+
+		t->list = header_parse(header);
+		free(header);
 
 		t->cur = datalist_get_next_active(t->list, t->cur);
 		if (t->cur > t->list->size) {
 			fprintf(stdout,
 				"Client %s, all files exist. Transfer request "
-				"denied.\n",
+				"denied\n",
 				t->client_id);
 			return; // All files are duplicates off the bat
 		}
 
-		printf("%s's transfer request accepted\n", t->client_id);
+		fprintf(stdout, "%s's transfer request accepted\n", t->client_id);
 		t->hd = init_cipher_context(t->list->vector, t->key);
 	} else {
 		status = receive_file(socketfd, t);
@@ -296,18 +314,10 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	}
 
 	uint16_t client_sends = htons(t->cur);
-	memcpy(return_string, &client_sends, sizeof(uint16_t));
-	return_string[RETURN_SIZE - 1] = status;
+	memcpy(response, &client_sends, sizeof(uint16_t));
+	response[RETURN_SIZE - 1] = status;
 
-	while (RETURN_SIZE - sent_total != 0) {
-		int n = send(socketfd, &return_string[sent_total],
-			     RETURN_SIZE - sent_total, 0);
-		if (n == -1) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-		sent_total += n;
-	}
+	write_all(socketfd, response, RETURN_SIZE);
 }
 
 /*
@@ -325,6 +335,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
 		write_all(cfd, failure, RETURN_SIZE);
+		free(key_location);
 		return;
 	}
 
@@ -347,9 +358,16 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(client_path);
 	free(key_location);
 	free(t->key);
-	fprintf(stdout, "%s's file(s) transfer complete.\n\n", t->client_id);
+
+	fprintf(stdout, "%s's file(s) transfer complete\n\n", t->client_id);
+
+	if (t->burn == NO_BURN)
+		fprintf(stdout, "done reading files from client\n\n");
 }
 
+/*
+ * Continually accept incoming connections until interrupted
+ */
 static void accept_connection(int socketfd)
 {
 	pid_t pid;
@@ -390,7 +408,6 @@ static void accept_connection(int socketfd)
 			handle_conn(recvfd, t);
 
 			destroy_transfer_ctx(t);
-			free(ip_port);
 			close(recvfd);
 			return;
 		} else {

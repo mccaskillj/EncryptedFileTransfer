@@ -6,7 +6,7 @@
  *  Purpose: Interface to functions for the file transfer UI
  *
  *
- *  Example usage:
+ *  Example usage (spinner or progress bar):
  *
  *  prg_bar *p = init_prg_bar();
  *
@@ -29,6 +29,9 @@
 #include <sys/ioctl.h>
 #include <time.h>
 
+/*
+ * Encapsulate all fields needed to maintain a spinner on the terminal
+ */
 typedef struct {
 	int idx;
 	int term_width;
@@ -38,6 +41,10 @@ typedef struct {
 	const char *stages;
 } spinner;
 
+/*
+ * Encapsulate all fields needed to maintain a progress bar on the
+ * terminal
+ */
 typedef struct {
 	float next_bar; // % of next bar
 	uint32_t current;
@@ -100,4 +107,4 @@ void spin_update(spinner *s);
  */
 void spin_destroy(spinner *s);
 
-#endif
+#endif /* UI_H */

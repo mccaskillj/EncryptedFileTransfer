@@ -40,4 +40,4 @@ int server_socket(char *port);
  */
 char *make_ip_port(struct sockaddr_storage *connection, socklen_t size);
 
-#endif
+#endif /* NET_H */

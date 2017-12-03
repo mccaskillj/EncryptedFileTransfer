@@ -11,9 +11,7 @@
 #include <libgen.h>
 #include <limits.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "common.h"
 #include "datalist.h"
@@ -24,9 +22,12 @@ data_head *datalist_init(uint8_t *vector)
 	if (list == NULL)
 		mem_error();
 
-	list->vector = calloc(INIT_VEC_BYTES, 1);
-	if (list->vector == NULL)
-		mem_error();
+	list->vector = NULL;
+	if (vector != NULL) {
+		list->vector = calloc(INIT_VEC_BYTES, 1);
+		if (NULL == list->vector)
+			mem_error();
+	}
 
 	memcpy(list->vector, vector, INIT_VEC_BYTES);
 	list->first = NULL;
@@ -36,14 +37,9 @@ data_head *datalist_init(uint8_t *vector)
 	return list;
 }
 
-/*finish this function once file structure is established*/
-int check_hash(char *name, uint8_t *hash)
-{
-	(void)name;
-	(void)hash;
-	return TRANSFER_Y;
-}
-
+/*
+ * Return a new node with the given name, size, hash, and transfer status
+ */
 static data_node *datalist_create_node(char *name, uint32_t size, uint8_t *hash,
 				       int transfer)
 {
@@ -85,7 +81,11 @@ void datalist_append(data_head *list, char *name, uint32_t size, uint8_t *hash,
 	list->size++;
 }
 
-void datalist_remove(data_head *list, data_node *node)
+/*
+ * Remove the given node from the given list and release its
+ * resources
+ */
+static void datalist_remove(data_head *list, data_node *node)
 {
 	if (list->size == 1) {
 		list->first = NULL;
@@ -113,6 +113,9 @@ void datalist_remove(data_head *list, data_node *node)
 	node = NULL;
 }
 
+/*
+ * Set the given nodes name, size and hash from the given bytes
+ */
 static void datalist_copy_item(data_node *node, uint8_t *copy_location)
 {
 	memcpy(copy_location, basename(node->name), NAME_BYTES);

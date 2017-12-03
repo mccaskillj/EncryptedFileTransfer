@@ -14,8 +14,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -25,6 +23,9 @@
 #include "parser.h"
 #include "ui.h"
 
+/*
+ * Encapsulate client-specific fields for a file transfer
+ */
 typedef struct {
 	uint8_t *key;
 	uint8_t *vector;
@@ -36,6 +37,9 @@ typedef struct {
 	char *r_ip;
 } client;
 
+/*
+ * Display a usage message and exit with the given status
+ */
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -90,7 +94,7 @@ static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
 }
 
 /*
- * Generate SHA-512 hashes for each file are transferring. Returns
+ * Generate hashes for each file are transferring. Returns
  * an array of pointers to hashes in the same order as the argument.
  * Will return NULL if one of the file paths is invalid.
  */
@@ -101,14 +105,10 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 		mem_error();
 
 	gcry_md_hd_t hd;
-	gcry_error_t err;
 	uint8_t tmpbuf[CHUNK_SIZE];
 
-	err = gcry_md_open(&hd, HASH_ALGO, 0);
-	if (err) {
-		gcry_strerror(err);
-		exit(EXIT_FAILURE);
-	}
+	gcry_error_t err = gcry_md_open(&hd, HASH_ALGO, 0);
+	g_error(err);
 
 	spinner *s = init_spinner("Hashing");
 
@@ -136,7 +136,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 				break;
 		}
 
-		unsigned char *digest = gcry_md_read(hd, HASH_ALGO);
+		uint8_t *digest = gcry_md_read(hd, HASH_ALGO);
 		memcpy(hashes[i], digest, HASH_BYTES);
 		gcry_md_reset(hd);
 		fclose(f);
@@ -148,8 +148,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 }
 
 /*
- * Determine the size of each file to be transferred with AES-256
- * encryption. Returns an array of sizes
+ * Return a list of sizes of each file to be transferred
  */
 static uint32_t *parse_sizes(char **to_transfer, uint16_t num_files)
 {
@@ -223,7 +222,7 @@ static int init_transfer(int serv, data_head *dh)
 
 	// Verify the server has clients key
 	static const uint8_t no_key[RETURN_SIZE] = {0};
-	if (memcmp(request, no_key, 3) == 3) {
+	if (memcmp(request, no_key, 3) == 0) {
 		return -1;
 	}
 
@@ -246,8 +245,10 @@ static int send_file(int sfd, gcry_cipher_hd_t hd, char *filepath, prg_bar *pb)
 	// Read a chunk from the file, encrypt, and write to server
 	while (!TERMINATED) {
 		int f_len = fread(f_buf, 1, CHUNK_SIZE, f);
+		if (f_len == 0)
+			break;
 
-		// Remaining bytes in file buf are set to random garbage
+		// Any remaining bytes in file buf are set to random garbage
 		gcry_randomize(f_buf + f_len, CHUNK_SIZE - f_len,
 			       GCRY_STRONG_RANDOM);
 
@@ -291,12 +292,33 @@ static client *new_client(char *svr_ip, char *svr_port, char *loc_ip,
 		mem_error();
 	gcry_create_nonce(c->vector, INIT_VEC_BYTES);
 
+	c->transferring = datalist_init(c->vector);
 	uint8_t **hashes = generate_hashes(files, num_files);
 
-	c->transferring = datalist_init(c->vector);
+	// Create the list based on what the client wants to send to the
+	// server
 	for (int i = 0; i < num_files; i++) {
+		// Don't add files to the list that have the same hash. We will
+		// skip all files with the same hash except the last
+		int j = i + 1;
+		bool duplicate = false;
+		while (j < num_files) {
+			if (memcmp(hashes[i], hashes[j], HASH_BYTES) != 0) {
+				j++;
+				continue;
+			}
+
+			fprintf(stderr, "skipping %s: duplicate hash found\n",
+				basename(files[i]));
+			duplicate = true;
+			break;
+		}
+
+		if (duplicate)
+			continue;
+
 		datalist_append(c->transferring, files[i], sizes[i], hashes[i],
-				TRANSFER_N);
+				TRANSFER_D);
 		free(files[i]);
 		free(hashes[i]);
 	}
@@ -331,18 +353,39 @@ static void destroy_client(client *c)
 }
 
 /*
- * Log all duplicate files that were destined to be transferred
- * to the server by the given client
+ * Log transfer results for the given client. Successful transfers
+ * display the short hash (similar to short git hashes).
  */
-static void log_duplicates(client *c)
+static void log_transfer_results(client *c)
 {
 	int idx = 1;
 	data_node *n = datalist_get_index(c->transferring, idx);
 
+	if (n != NULL)
+		fprintf(stdout, "Transfer summary:\n");
+
 	while (n != NULL) {
-		if (n->transfer == TRANSFER_N)
-			fprintf(stderr, "%s already exists on server\n",
-				basename(n->name));
+		char *bname = basename(n->name);
+
+		switch (n->transfer) {
+		case TRANSFER_Y: {
+			char *hex_hash = hash_to_hex(n->hash);
+			fprintf(stdout,
+				"%s successfully transferred with fingerprint "
+				"%.*s\n",
+				bname, 8, hex_hash);
+			free(hex_hash);
+		} break;
+		case TRANSFER_N:
+			fprintf(stderr, "%s failed to transfer\n", bname);
+			break;
+		case TRANSFER_D:
+			fprintf(stdout, "%s already exists on server\n", bname);
+			break;
+		default:
+			fprintf(stderr, "unknown transfer result %d\n",
+				n->transfer);
+		}
 
 		idx += 1;
 		n = datalist_get_index(c->transferring, idx);
@@ -354,10 +397,20 @@ static void log_duplicates(client *c)
  * configuration. Returns true on successful transfer of all
  * non-duplicate files, false otherwise.
  */
-static bool transfer_files(client *c)
+static bool transfer_files(client *c, int burn)
 {
 	fprintf(stdout, "Connecting to server...\n");
 	int sfd = client_socket(c->r_ip, c->r_port, c->l_ip, c->l_port);
+
+	if (burn == BURN) {
+		uint8_t burn_msg[HEADER_INIT_SIZE];
+		memset(burn_msg, 0, HEADER_INIT_SIZE);
+		write_all(sfd, burn_msg, HEADER_INIT_SIZE);
+		fprintf(stderr, "No AES key on server\n");
+		fprintf(stderr, "Transferring all files failed\n");
+		close(sfd);
+		return true;
+	}
 
 	int requested_idx = init_transfer(sfd, c->transferring);
 	if (requested_idx == -1) {
@@ -420,7 +473,7 @@ static bool transfer_files(client *c)
 	prg_destroy(pb); // First to clear stdout
 
 	if (!interrupted)
-		log_duplicates(c);
+		log_transfer_results(c);
 
 	gcry_cipher_close(hd);
 	close(sfd);
@@ -430,12 +483,13 @@ static bool transfer_files(client *c)
 int main(int argc, char *argv[])
 {
 	int opt = 0;
+	int burn = NO_BURN;
 	char *l_port = NULL, *l_ip = NULL;
 	char *r_port = NULL, *r_ip = NULL;
 	char *key_path = NULL, *file_paths = NULL;
 	init_sig_handler();
 
-	while ((opt = getopt(argc, argv, "l:r:k:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "l:r:k:f:hb")) != -1) {
 		switch (opt) {
 		case 'r':
 			r_ip = parse_ip(optarg);
@@ -450,6 +504,10 @@ int main(int argc, char *argv[])
 			break;
 		case 'f':
 			file_paths = strdup(optarg);
+			break;
+		case 'b':
+			// Top secret, so this isn't in the usage message
+			burn = BURN;
 			break;
 		case 'h':
 			usage(argv[0], EXIT_SUCCESS);
@@ -478,7 +536,7 @@ int main(int argc, char *argv[])
 
 	int status = EXIT_SUCCESS;
 	if (!TERMINATED) {
-		bool ok = transfer_files(c);
+		bool ok = transfer_files(c, burn);
 		if (!ok) {
 			status = EXIT_FAILURE;
 			fprintf(stderr, "Transferring all files failed\n");
