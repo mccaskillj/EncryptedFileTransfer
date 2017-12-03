@@ -23,6 +23,9 @@
 #include "parser.h"
 #include "ui.h"
 
+/*
+ * Encapsulate client-specific fields for a file transfer
+ */
 typedef struct {
 	uint8_t *key;
 	uint8_t *vector;
@@ -34,6 +37,9 @@ typedef struct {
 	char *r_ip;
 } client;
 
+/*
+ * Display a usage message and exit with the given status
+ */
 static void usage(char *bin_path, int exit_status)
 {
 	char *bin = basename(bin_path);
@@ -88,7 +94,7 @@ static char **parse_filepaths(char *file_paths, uint16_t file_cnt)
 }
 
 /*
- * Generate SHA-512 hashes for each file are transferring. Returns
+ * Generate hashes for each file are transferring. Returns
  * an array of pointers to hashes in the same order as the argument.
  * Will return NULL if one of the file paths is invalid.
  */
@@ -142,8 +148,7 @@ static uint8_t **generate_hashes(char **to_transfer, uint16_t num_files)
 }
 
 /*
- * Determine the size of each file to be transferred with AES-256
- * encryption. Returns an array of sizes
+ * Return a list of sizes of each file to be transferred
  */
 static uint32_t *parse_sizes(char **to_transfer, uint16_t num_files)
 {
