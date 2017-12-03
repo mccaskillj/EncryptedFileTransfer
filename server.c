@@ -222,7 +222,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	gcry_error_t err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
 	g_error(err);
 
-	printf("Receiving %s's file: %s...\n", t->client_id, node->name);
+	fprintf(stdout, "Receiving %s's file: %s...\n", t->client_id, node->name);
 
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
@@ -241,7 +241,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	printf("Checking %s's file: %s...\n", t->client_id, node->name);
+	fprintf(stdout, "Checking %s's file: %s...\n", t->client_id, node->name);
 
 	//  Validate the received contents
 	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
