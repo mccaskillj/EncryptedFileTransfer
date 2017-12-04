@@ -46,7 +46,7 @@ static void usage(char *bin_path, int exit_status)
 
 	fprintf(
 	    stderr,
-	    "Usage: %s -f files [-l [ip]:port] [-r [ip]:port] [-k key] [-h]\n\n"
+	    "Usage: %s -f files -l [ip]:port [-r [ip]:port] [-k key] [-h]\n\n"
 	    "Options:\n"
 	    "-f Comma separated path(s) to file(s) to transfer (eg: "
 	    "file1,file2)\n"
@@ -520,9 +520,13 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	// Files required for transfer
 	if (NULL == file_paths)
-		usage(argv[0],
-		      EXIT_FAILURE); // Files required for transfer
+		usage(argv[0], EXIT_FAILURE);
+
+	// Local port required
+	if (NULL == l_port)
+		usage(argv[0], EXIT_FAILURE);
 
 	if (NULL == key_path)
 		key_path = strdup(DEFAULT_KEY_PATH);
