@@ -96,13 +96,12 @@ static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 	uint8_t initial_read[header_size];
 	memset(initial_read, 0, header_size);
 
-	fprintf(stdout, "reading initial transfer header bytes\n");
 	recv_all(socketfd, initial_read, header_size);
 
 	// Remove the clients key when they send an empty header
 	if (memcmp(initial_read, burn, HEADER_INIT_SIZE) == 0) {
 		char *key_path = concat_paths(CWD_KEYS, t->client_id);
-		fprintf(stdout, "burn initiated...client key eliminated\n");
+		fprintf(stdout, "Burn initiated...client key eliminated\n");
 		int r = remove(key_path);
 		if (r == -1)
 			perror("remove burn");
@@ -122,7 +121,7 @@ static uint8_t *read_initial_header(int socketfd, transfer_ctx *t)
 
 	memcpy(buf, initial_read, header_size);
 	recv_all(socketfd, buf + header_size, files_info - header_size);
-	fprintf(stdout, "read full transfer header\n");
+
 	return buf;
 }
 
@@ -199,7 +198,6 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		fprintf(stderr, "no file to save at idx %d\n", t->cur);
 		exit(EXIT_FAILURE);
 	}
-	fprintf(stderr, "receiving %s...\n", node->name);
 
 	// Read into a temp file because the hash isn't validated
 	char tmp_name[] = "incoming-XXXXXX";
@@ -224,6 +222,8 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	gcry_error_t err = gcry_md_open(&hash_hd, HASH_ALGO, 0);
 	g_error(err);
 
+	fprintf(stdout, "Receiving %s's file: %s...\n", t->client_id, node->name);
+
 	while (total_read < node->size) {
 		recv_all(cfd, rx_buf, CHUNK_SIZE);
 
@@ -241,7 +241,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	fclose(fp);
+	fprintf(stdout, "Checking %s's file: %s...\n", t->client_id, node->name);
 
 	//  Validate the received contents
 	uint8_t *actual_hash = gcry_md_read(hash_hd, HASH_ALGO);
@@ -249,13 +249,26 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 	gcry_md_close(hash_hd);
 
 	if (!matches) {
-		fprintf(stderr, "%s digest mismatch\n", node->name);
+		fprintf(stderr,
+			"%s's file, %s failed integrity check\nConnection "
+			"terminated\n",
+			t->client_id, node->name);
 		return TRANSFER_N;
 	}
 
+	fprintf(stdout, "%s's file %s matches as expected\n", t->client_id, node->name);
+	fprintf(stdout, "Saving %s's file: %s...\n", t->client_id, node->name);
+
+	// Moved this here because pause at the end happens here so
+	// logging before this to let the user know that it's saving
+	// the file. If you guys have a better idea then let me know.
+	fclose(fp);
+
 	// Temp file renamed to actual name and create the meta file
 	save_files(tmp_name, node, t->client_id);
-	fprintf(stdout, "receiving %s done\n", node->name);
+	fprintf(stdout, "%s's file %s successfully transfered!\n", t->client_id,
+	       node->name);
+
 	return TRANSFER_Y;
 }
 
@@ -270,6 +283,8 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
+
+		fprintf(stdout, "Validating %s's transfer request...\n", t->client_id);
 		uint8_t *header = read_initial_header(socketfd, t);
 
 		// Client wants to burn their key
@@ -283,9 +298,15 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 		free(header);
 
 		t->cur = datalist_get_next_active(t->list, t->cur);
-		if (t->cur > t->list->size)
+		if (t->cur > t->list->size) {
+			fprintf(stdout,
+				"Client %s, all files exist. Transfer request "
+				"denied\n",
+				t->client_id);
 			return; // All files are duplicates off the bat
+		}
 
+		fprintf(stdout, "%s's transfer request accepted\n", t->client_id);
 		t->hd = init_cipher_context(t->list->vector, t->key);
 	} else {
 		status = receive_file(socketfd, t);
@@ -309,6 +330,7 @@ static void handle_conn(int cfd, transfer_ctx *t)
 
 	// Ensure the client has a valid key on the server
 	char *key_location = concat_paths(KEYS_DIR, t->client_id);
+
 	t->key = read_key(key_location);
 	if (t->key == NULL) {
 		memset(failure, 0, RETURN_SIZE);
@@ -336,6 +358,9 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(client_path);
 	free(key_location);
 	free(t->key);
+
+	fprintf(stdout, "%s's file(s) transfer complete\n\n", t->client_id);
+
 	if (t->burn == NO_BURN)
 		fprintf(stdout, "done reading files from client\n\n");
 }
