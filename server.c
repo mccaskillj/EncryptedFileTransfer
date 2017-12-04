@@ -242,7 +242,7 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		bytes_left -= CHUNK_SIZE;
 	}
 
-	fprintf(stdout, "Checking %s's file: %s...\n", t->client_id,
+	fprintf(stdout, "Integrity checking %s's file: %s...\n", t->client_id,
 		node->name);
 
 	//  Validate the received contents
@@ -258,15 +258,13 @@ static uint8_t receive_file(int cfd, transfer_ctx *t)
 		return TRANSFER_N;
 	}
 
-	fprintf(stdout, "%s's file %s matches as expected\n", t->client_id,
+	fprintf(stdout, "%s's file %s integrity check passed\n", t->client_id,
 		node->name);
-	fprintf(stdout, "Saving %s's file: %s...\n", t->client_id, node->name);
-
 	fclose(fp);
 
 	// Temp file renamed to actual name and create the meta file
 	save_files(tmp_name, node, t->client_id);
-	fprintf(stdout, "%s's file %s successfully transfered!\n", t->client_id,
+	fprintf(stdout, "%s's file %s successfully transfered\n", t->client_id,
 		node->name);
 
 	return TRANSFER_Y;
@@ -283,7 +281,6 @@ static void read_from_client(int socketfd, transfer_ctx *t)
 	uint8_t status = 0;
 
 	if (t->list == NULL) {
-
 		fprintf(stdout, "Validating %s's transfer request...\n",
 			t->client_id);
 		uint8_t *header = read_initial_header(socketfd, t);
@@ -361,10 +358,8 @@ static void handle_conn(int cfd, transfer_ctx *t)
 	free(key_location);
 	free(t->key);
 
-	fprintf(stdout, "%s's file(s) transfer complete\n\n", t->client_id);
-
 	if (t->burn == NO_BURN)
-		fprintf(stdout, "done reading files from client\n\n");
+		fprintf(stdout, "%s's transfer complete\n", t->client_id);
 }
 
 /*

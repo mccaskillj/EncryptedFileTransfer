@@ -94,8 +94,7 @@ char *make_ip_port(struct sockaddr_storage *connection, socklen_t size)
 }
 
 /*
- * Set the socket to re-use the bound address, and use the given
- * timeout for reading and writing
+ * Set the socket to re-use the bound address
  */
 static void set_socket_options(int sfd)
 {
