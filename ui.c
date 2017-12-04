@@ -91,7 +91,7 @@ void prg_reset(prg_bar *pg, uint32_t max_items, uint32_t item_bytes,
 	if (pg->current > 0)
 		printf("\n"); // leave previous bar in-tact, start new
 
-	pg->per_bar = 100.0 / BAR_WIDTH;
+	pg->per_bar = (100.0 / BAR_WIDTH) - 1;
 	pg->per_item = 100.0 / max_items;
 	pg->next_bar = pg->per_bar;
 	pg->desc = desc;
